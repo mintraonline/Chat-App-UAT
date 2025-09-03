@@ -15,6 +15,11 @@ body {
   overflow: hidden;
 }
 
+.media-container {
+  margin-bottom: 8px;
+  max-width: 100%;
+}
+
 .sidebar {
   width: 300px;
   background-color: #9b1c1c !important;
@@ -737,6 +742,101 @@ margin-left: 15px;
   background-color: #f0f0f0;
 }
 
+.chat-media.chat-media {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.file-container {
+  margin-bottom: 8px;
+}
+
+.file-download-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  max-width: 250px;
+}
+
+.file-download-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-preview {
+  position: relative;
+  margin-bottom: 10px;
+  max-width: 200px;
+}
+
+.preview-image, .preview-video {
+  max-width: 100%;
+  max-height: 150px;
+  border-radius: 8px;
+}
+
+.preview-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+.preview-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+.remove-media-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #e53935;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+}
+
+/* Attach file button */
+.attach-file-btn {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.attach-file-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Adjust input padding to make room for buttons */
+.chat-input-field input {
+  padding: 12px 48px 12px 48px !important;
+}
 /* Responsive */
 @media (max-width: 768px) {
   .chat-app {
@@ -862,6 +962,21 @@ margin-left: 15px;
 
   .logout-button {
     align-self: center;
+  }
+    .chat-media {
+    max-height: 200px;
+  }
+  
+  .media-preview {
+    max-width: 150px;
+  }
+  
+  .preview-image, .preview-video {
+    max-height: 120px;
+  }
+  
+  .file-download-link {
+    max-width: 200px;
   }
 }
 

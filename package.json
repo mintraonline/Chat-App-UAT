@@ -5,6 +5,7 @@
   "dependencies": {
     "@tailwindcss/cli": "^4.1.11",
     "autoprefixer": "^10.4.21",
+    "axios": "^1.11.0",
     "cra-template-pwa": "2.0.0",
     "firebase": "^11.9.1",
     "gh-pages": "^6.3.0",

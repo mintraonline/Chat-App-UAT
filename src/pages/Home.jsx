@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import { AuthContext } from "../context/AuthContext";
 import {
   collection,
@@ -11,17 +11,27 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
+import axios from "axios"; // 🔹 added
 import "./Home.css";
 import { signOut } from "firebase/auth";
 import { FaArrowLeft, FaUserCircle } from "react-icons/fa";
 import { BsPersonCircle } from "react-icons/bs";
-import { MdDeleteOutline, MdOutlinePersonOutline } from "react-icons/md";
+import {
+  MdDeleteOutline,
+  MdOutlinePersonOutline,
+  MdAttachFile,
+} from "react-icons/md";
 import { FiLogOut } from "react-icons/fi";
-import { IoMdSend } from "react-icons/io";
+import { IoMdSend, IoMdClose } from "react-icons/io";
 
 const isMobile = () => window.innerWidth <= 768;
 
 const Home = () => {
+  const CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || "demo";
+  const UPLOAD_PRESET =
+    process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET || "chat_media";
+  const FOLDER_NAME = process.env.REACT_APP_CLOUDINARY_FOLDER;
+
   const { currentUser } = useContext(AuthContext);
   const [allUsers, setAllUsers] = useState([]);
   const [users, setUsers] = useState([]);
@@ -33,6 +43,11 @@ const Home = () => {
   const [unreadMap, setUnreadMap] = useState({});
   const [lastMessageMap, setLastMessageMap] = useState({});
   const [showSidebar, setShowSidebar] = useState(false);
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [mediaType, setMediaType] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -118,6 +133,7 @@ const Home = () => {
     signOut(auth).catch((err) => console.error("Logout failed:", err));
     localStorage.removeItem("selectedUser");
   };
+
   useEffect(() => {
     if (!selectedUser) return;
     const combinedId =
@@ -133,6 +149,11 @@ const Home = () => {
 
   const handleSelectUser = async (user) => {
     setSelectedUser(user);
+    setText("");
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType(null);
+
     localStorage.setItem("selectedUser", JSON.stringify(user));
     if (isMobile()) setShowSidebar(false);
 
@@ -209,13 +230,68 @@ const Home = () => {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setMediaFile(file);
+
+    if (file.type.startsWith("image/")) {
+      setMediaType("image");
+      setMediaPreview(URL.createObjectURL(file));
+    } else if (file.type.startsWith("video/")) {
+      setMediaType("video");
+      setMediaPreview(URL.createObjectURL(file));
+    } else if (file.type === "application/pdf") {
+      setMediaType("pdf");
+      setMediaPreview(URL.createObjectURL(file));
+    } else {
+      setMediaType("file");
+      setMediaPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removeMedia = () => {
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleSend = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() && !mediaFile) return;
+    setUploading(true);
 
     const combinedId =
       currentUser.uid > selectedUser.uid
         ? currentUser.uid + selectedUser.uid
         : selectedUser.uid + currentUser.uid;
+
+    let mediaUrl = null;
+
+    if (mediaFile) {
+      try {
+        const formData = new FormData();
+        formData.append("file", mediaFile);
+        formData.append("upload_preset", UPLOAD_PRESET);
+
+        // ✅ Always set folder (fallback to "uat_chat" if not provided)
+        formData.append("folder", FOLDER_NAME || "uat_chat");
+
+        const response = await axios.post(
+          `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
+          formData
+        );
+
+        mediaUrl = response.data.secure_url;
+      } catch (err) {
+        console.error("❌ Failed to upload to Cloudinary:", err);
+        setUploading(false);
+        return;
+      }
+    }
 
     const newMessage = {
       id: Date.now(),
@@ -223,6 +299,7 @@ const Home = () => {
       senderId: currentUser.uid,
       date: new Date(),
       readBy: [currentUser.uid],
+      ...(mediaUrl && { mediaUrl, mediaType, fileName: mediaFile?.name }),
     };
 
     const participants = [currentUser.uid, selectedUser.uid];
@@ -237,9 +314,7 @@ const Home = () => {
           messages: [newMessage],
         });
       } else {
-        await ensureParticipantsExist(chatRef, participants);
         const existingMessages = chatSnap.data().messages || [];
-
         await updateDoc(chatRef, {
           messages: [...existingMessages, newMessage],
           participants,
@@ -270,9 +345,15 @@ const Home = () => {
         { merge: true }
       );
 
+      // Reset inputs
       setText("");
+      setMediaFile(null);
+      setMediaPreview(null);
+      setMediaType(null);
     } catch (err) {
       console.error("❌ Failed to send message:", err);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -347,6 +428,49 @@ const Home = () => {
       return `${diffInMinutes} min${diffInMinutes > 1 ? "s" : ""} ago`;
     }
     return "just now";
+  };
+
+  const renderMediaContent = (msg) => {
+    if (!msg.mediaUrl) return null;
+
+    switch (msg.mediaType) {
+      case "image":
+        return (
+          <div className="media-container">
+            <img
+              src={msg.mediaUrl}
+              alt="Shared media"
+              className="chat-media"
+              onClick={() => window.open(msg.mediaUrl, "_blank")}
+            />
+          </div>
+        );
+      case "video":
+        return (
+          <div className="media-container">
+            <video controls className="chat-media">
+              <source src={msg.mediaUrl} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        );
+      case "file":
+        return (
+          <div className="file-container">
+            <a
+              href={msg.mediaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="file-download-link"
+            >
+              <MdAttachFile size={20} />
+              <span>{msg.fileName}</span>
+            </a>
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -468,7 +592,7 @@ const Home = () => {
                 setTimeout(() => {
                   e.target.scrollIntoView({
                     behavior: "smooth",
-                    block: "center", 
+                    block: "center",
                   });
                 }, 300);
               }}
@@ -698,7 +822,8 @@ const Home = () => {
                             }))}
                     </span>
                   </div>
-                  <div className="message-text">{msg.text}</div>
+                  {renderMediaContent(msg)}
+                  {msg.text && <div className="message-text">{msg.text}</div>}
                 </div>
               </div>
             ))}
@@ -706,6 +831,47 @@ const Home = () => {
         </div>
         {selectedUser && (
           <div className="chat-input-wrapper">
+            {mediaPreview && (
+              <div className="media-preview">
+                {mediaType === "image" && (
+                  <img
+                    src={mediaPreview}
+                    alt="Preview"
+                    className="preview-image"
+                  />
+                )}
+
+                {mediaType === "video" && (
+                  <video
+                    src={mediaPreview}
+                    controls
+                    className="preview-video"
+                  />
+                )}
+
+                {mediaType === "pdf" && (
+                  <embed
+                    src={mediaPreview}
+                    type="application/pdf"
+                    className="preview-pdf"
+                    width="200"
+                    height="150"
+                  />
+                )}
+
+                {mediaType === "file" && (
+                  <div className="preview-file">
+                    <MdAttachFile size={24} />
+                    <span>{mediaFile?.name}</span>
+                  </div>
+                )}
+
+                <button className="remove-media-btn" onClick={removeMedia}>
+                  <IoMdClose size={16} />
+                </button>
+              </div>
+            )}
+
             <div className="chat-input-field">
               <input
                 type="text"
@@ -718,12 +884,26 @@ const Home = () => {
                   }
                 }}
                 placeholder="Type a message..."
+                disabled={uploading}
               />
-              {text.length > 0 && (
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+                style={{ display: "none" }}
+                id="file-input"
+                disabled={uploading}
+              />
+              <label htmlFor="file-input" className="attach-file-btn">
+                <MdAttachFile size={24} color="#9b1c1c" />
+              </label>
+              {(text.length > 0 || mediaFile) && (
                 <span
                   className="send-icon-inside"
                   title="Send"
                   onClick={handleSend}
+                  style={{ opacity: uploading ? 0.5 : 1 }}
                 >
                   <IoMdSend size={20} color="#fff" />
                 </span>
