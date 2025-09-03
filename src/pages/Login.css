@@ -1,0 +1,312 @@
+/* Reset & base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  height: 10%;
+  background-color: #f4a8a8 !important;
+  background: #f4a8a8 !important;
+}
+.dots-layer {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: hidden;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+/* Base dot style */
+.dot {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.1;
+}
+
+/* Variety of styles */
+.dot-0 {
+  width: 12px;
+  height: 12px;
+  background: white;
+  top: 5%;
+  left: 10%;
+}
+
+.dot-1 {
+  width: 8px;
+  height: 8px;
+  background: #eeeeee;
+  top: 25%;
+  left: 85%;
+}
+
+.dot-6 {
+  width: 22px;
+  height: 23px;
+  background: #eeeeee;
+  top: 5%;
+  left: 55%;
+}
+
+.dot-7 {
+  width: 8px;
+  height: 8px;
+  background: #eeeeee;
+  top: 20%;
+  left: 35%;
+}
+
+.dot-2 {
+  width: 6px;
+  height: 6px;
+  background: #fff;
+  top: 60%;
+  left: 35%;
+}
+
+.dot-3 {
+  width: 10px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.4);
+  top: 80%;
+  left: 20%;
+}
+
+.dot-4 {
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.3);
+  top: 80%;
+  left: 80%;
+}
+.dot-5 {
+  width: 14px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.3);
+  top: 40%;
+  left: 60%;
+}
+.dot-8 {
+  width: 14px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.3);
+  top: 90%;
+  left: 50%;
+}
+
+.login-box {
+  position: relative;
+  z-index: 1;
+}
+
+/* Login container */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  padding: 20px;
+}
+
+/* Login box */
+.login-box {
+  background-color: #ffffff;
+  padding: 40px 30px;
+  border-radius: 24px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+/* Title */
+.login-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 28px;
+  color: #333;
+}
+
+/* Input field */
+.login-input {
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  border: 1px solid #ccc;
+  border-radius: 25px;
+  font-size: 15px;
+  transition: border-color 0.3s ease;
+  outline: none;
+}
+
+.login-input:focus {
+  border-color: #2575fc;
+}
+
+/* Login button */
+.login-button {
+  width: 100%;
+  padding: 14px 16px;
+  background-color: #333;
+  color: white;
+  font-size: 16px;
+  border: none;
+  border-radius: 26px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.login-button:hover {
+  background-color: #000;
+}
+
+/* Reset password */
+.reset-password {
+  font-size: 13px;
+  color: #7e1717;
+  margin-bottom: 24px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Footer */
+.login-footer {
+  margin-top: 20px;
+  font-size: 14px;
+  color: #555;
+}
+
+.register-link {
+  color: #2575fc;
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.register-link:hover {
+  text-decoration: underline;
+}
+
+/* Admin PIN Modal */
+.pin-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  backdrop-filter: blur(4px);
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pin-box {
+  background: #fff;
+  padding: 24px 30px;
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 350px;
+  text-align: center;
+}
+
+.pin-box h3 {
+  margin-bottom: 10px;
+  font-size: 22px;
+  color: #333;
+}
+
+.pin-box p {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.pin-input {
+  padding: 10px;
+  font-size: 20px;
+  width: 100px;
+  text-align: center;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  outline: none;
+  margin-bottom: 16px;
+}
+
+.pin-input:focus {
+  border-color: #2575fc;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+}
+
+.pin-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.pin-actions button {
+  background-color: #333;
+  color: white;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.pin-actions button:hover {
+  background-color: #1a5ed8;
+}
+
+.pin-actions button:last-child {
+  background-color: #ccc;
+  color: #333;
+}
+
+.pin-actions button:last-child:hover {
+  background-color: #b0b0b0;
+}
+
+/* Responsive styles */
+@media (max-width: 480px) {
+  .login-box {
+    padding: 30px 22px;
+  }
+
+  .login-title {
+    font-size: 20px;
+  }
+
+  .login-input,
+  .login-button {
+    font-size: 14px;
+  }
+
+  .reset-password,
+  .login-footer {
+    font-size: 12px;
+  }
+}
