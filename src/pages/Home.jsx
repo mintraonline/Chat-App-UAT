@@ -23,8 +23,12 @@ import {
 } from "react-icons/md";
 import { FiLogOut } from "react-icons/fi";
 import { IoMdSend, IoMdClose } from "react-icons/io";
+import imageCompression from "browser-image-compression";
+import JSZip from "jszip";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
 
 const isMobile = () => window.innerWidth <= 768;
+const ffmpeg = new FFmpeg();
 
 const Home = () => {
   const CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || "demo";
@@ -230,25 +234,86 @@ const Home = () => {
     }
   };
 
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setMediaFile(file);
+    let processedFile = file;
 
-    if (file.type.startsWith("image/")) {
-      setMediaType("image");
-      setMediaPreview(URL.createObjectURL(file));
-    } else if (file.type.startsWith("video/")) {
-      setMediaType("video");
-      setMediaPreview(URL.createObjectURL(file));
-    } else if (file.type === "application/pdf") {
-      setMediaType("pdf");
-      setMediaPreview(URL.createObjectURL(file));
-    } else {
-      setMediaType("file");
-      setMediaPreview(URL.createObjectURL(file));
+    try {
+      // ✅ IMAGE compression
+      if (file.type.startsWith("image/")) {
+        const options = {
+          maxSizeMB: 1, // target max size 1MB
+          maxWidthOrHeight: 1280,
+          useWebWorker: true,
+        };
+        processedFile = await imageCompression(file, options);
+
+        setMediaType("image");
+        setMediaPreview(URL.createObjectURL(processedFile));
+      }
+
+      // ✅ VIDEO compression
+      else if (file.type.startsWith("video/")) {
+        if (!ffmpeg.loaded) await ffmpeg.load();
+
+        // Write input file
+        await ffmpeg.writeFile(
+          file.name,
+          await fetch(file).then((res) => res.arrayBuffer())
+        );
+
+        // Run ffmpeg compression
+        await ffmpeg.exec([
+          "-i",
+          file.name,
+          "-vcodec",
+          "libx264",
+          "-crf",
+          "28",
+          "-preset",
+          "veryfast",
+          "output.mp4",
+        ]);
+
+        // Read compressed file
+        const data = await ffmpeg.readFile("output.mp4");
+        processedFile = new File([data], "compressed.mp4", {
+          type: "video/mp4",
+        });
+
+        setMediaType("video");
+        setMediaPreview(URL.createObjectURL(processedFile));
+      }
+
+      else if (
+        file.type === "application/pdf" ||
+        file.type.includes("word") ||
+        file.type.includes("text")
+      ) {
+        const zip = new JSZip();
+        zip.file(file.name, file);
+        const zipped = await zip.generateAsync({ type: "blob" });
+
+        processedFile = new File([zipped], file.name + ".zip", {
+          type: "application/zip",
+        });
+
+        setMediaType("file");
+        setMediaPreview(URL.createObjectURL(processedFile));
+      }
+
+      else {
+        setMediaType("file");
+        setMediaPreview(URL.createObjectURL(file));
+      }
+    } catch (err) {
+      console.error("❌ Compression failed, using original file:", err);
+      processedFile = file;
     }
+
+    setMediaFile(processedFile);
   };
 
   const removeMedia = () => {
