@@ -51,6 +51,7 @@ const Home = () => {
   const [mediaPreview, setMediaPreview] = useState(null);
   const [mediaType, setMediaType] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -532,6 +533,12 @@ const Home = () => {
 
   return (
     <div className="chat-app">
+      {uploading && (
+        <div className="loader-overlay">
+          <div className="loader"></div>
+          <p>Sending...</p>
+        </div>
+      )}
       {!isMobile() && (
         <div className="sidebar">
           <div className="sidebar-header">
