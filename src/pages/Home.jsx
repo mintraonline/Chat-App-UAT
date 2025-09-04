@@ -254,32 +254,24 @@ const Home = () => {
         setMediaPreview(URL.createObjectURL(processedFile));
       }
 
-      // ✅ VIDEO compression
       else if (file.type.startsWith("video/")) {
         if (!ffmpeg.loaded) await ffmpeg.load();
 
-        // Write input file
-        await ffmpeg.writeFile(
-          file.name,
-          await fetch(file).then((res) => res.arrayBuffer())
-        );
+        const data = await file.arrayBuffer();
+        await ffmpeg.writeFile(file.name, new Uint8Array(data));
 
         // Run ffmpeg compression
         await ffmpeg.exec([
-          "-i",
-          file.name,
-          "-vcodec",
-          "libx264",
-          "-crf",
-          "28",
-          "-preset",
-          "veryfast",
-          "output.mp4",
+          "-i", file.name,
+          "-vcodec", "libx264",
+          "-crf", "28",
+          "-preset", "veryfast",
+          "output.mp4"
         ]);
 
         // Read compressed file
-        const data = await ffmpeg.readFile("output.mp4");
-        processedFile = new File([data], "compressed.mp4", {
+        const output = await ffmpeg.readFile("output.mp4");
+        processedFile = new File([output.buffer], "compressed.mp4", {
           type: "video/mp4",
         });
 
