@@ -295,7 +295,6 @@ const Home = () => {
 
     let processedFile = mediaFile;
 
-    // ✅ Compress video only at the time of sending
     if (mediaType === "video") {
       try {
         if (!ffmpeg.isLoaded()) await ffmpeg.load();
@@ -370,7 +369,6 @@ const Home = () => {
     };
 
     try {
-      // Update Firestore
       const chatDocRef = doc(db, "chats", chatId);
 
       await updateDoc(chatDocRef, {
@@ -384,7 +382,6 @@ const Home = () => {
         },
       });
 
-      // Update user chats metadata
       const userChatUpdates = {
         [`${chatId}.lastMessage`]: {
           text: text || (mediaType === "image" ? "📷 Image" : "🎥 Video"),
@@ -398,7 +395,6 @@ const Home = () => {
       await updateDoc(doc(db, "userChats", currentUser.uid), userChatUpdates);
       await updateDoc(doc(db, "userChats", selectedUser.uid), userChatUpdates);
 
-      // Reset input
       setText("");
       setMediaFile(null);
       setMediaPreview(null);
