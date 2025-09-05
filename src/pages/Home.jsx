@@ -9,6 +9,7 @@ import {
   setDoc,
   updateDoc,
   getDoc,
+  arrayUnion
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import axios from "axios"; // 🔹 added
@@ -52,6 +53,7 @@ const Home = () => {
   const [mediaType, setMediaType] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState("");
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -235,78 +237,23 @@ const Home = () => {
     }
   };
 
-  const handleFileSelect = async (e) => {
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    let processedFile = file;
+    setMediaFile(file); // Store original file for later use
 
-    try {
-      // ✅ IMAGE compression
-      if (file.type.startsWith("image/")) {
-        const options = {
-          maxSizeMB: 1, // target max size 1MB
-          maxWidthOrHeight: 1280,
-          useWebWorker: true,
-        };
-        processedFile = await imageCompression(file, options);
-
-        setMediaType("image");
-        setMediaPreview(URL.createObjectURL(processedFile));
-      }
-
-      else if (file.type.startsWith("video/")) {
-        if (!ffmpeg.loaded) await ffmpeg.load();
-
-        const data = await file.arrayBuffer();
-        await ffmpeg.writeFile(file.name, new Uint8Array(data));
-
-        // Run ffmpeg compression
-        await ffmpeg.exec([
-          "-i", file.name,
-          "-vcodec", "libx264",
-          "-crf", "28",
-          "-preset", "veryfast",
-          "output.mp4"
-        ]);
-
-        // Read compressed file
-        const output = await ffmpeg.readFile("output.mp4");
-        processedFile = new File([output.buffer], "compressed.mp4", {
-          type: "video/mp4",
-        });
-
-        setMediaType("video");
-        setMediaPreview(URL.createObjectURL(processedFile));
-      }
-
-      else if (
-        file.type === "application/pdf" ||
-        file.type.includes("word") ||
-        file.type.includes("text")
-      ) {
-        const zip = new JSZip();
-        zip.file(file.name, file);
-        const zipped = await zip.generateAsync({ type: "blob" });
-
-        processedFile = new File([zipped], file.name + ".zip", {
-          type: "application/zip",
-        });
-
-        setMediaType("file");
-        setMediaPreview(URL.createObjectURL(processedFile));
-      }
-
-      else {
-        setMediaType("file");
-        setMediaPreview(URL.createObjectURL(file));
-      }
-    } catch (err) {
-      console.error("❌ Compression failed, using original file:", err);
-      processedFile = file;
+    if (file.type.startsWith("image/")) {
+      setMediaType("image");
+      setMediaPreview(URL.createObjectURL(file));
+    } else if (file.type.startsWith("video/")) {
+      setMediaType("video");
+      setMediaPreview(URL.createObjectURL(file));
+    } else {
+      // PDFs, docs, txt, xlsx, pptx, etc. all treated as generic files
+      setMediaType("file");
+      setMediaPreview(null); // No preview URL so no broken embed
     }
-
-    setMediaFile(processedFile);
   };
 
   const removeMedia = () => {
@@ -320,22 +267,54 @@ const Home = () => {
 
   const handleSend = async () => {
     if (!text.trim() && !mediaFile) return;
-    setUploading(true);
+    const chatId = currentUser.uid > selectedUser.uid
+      ? currentUser.uid + selectedUser.uid
+      : selectedUser.uid + currentUser.uid;
 
-    const combinedId =
-      currentUser.uid > selectedUser.uid
-        ? currentUser.uid + selectedUser.uid
-        : selectedUser.uid + currentUser.uid;
+    setUploading(true);
+    setLoadingText(mediaType === "video" ? "Compressing..." : "Sending...");
+
+    let processedFile = mediaFile;
+
+    // ✅ Compress video only at the time of sending
+    if (mediaType === "video") {
+      try {
+        if (!ffmpeg.isLoaded()) await ffmpeg.load();
+
+        const data = await mediaFile.arrayBuffer();
+        await ffmpeg.writeFile(mediaFile.name, new Uint8Array(data));
+
+        await ffmpeg.exec([
+          "-i", mediaFile.name,
+          "-vcodec", "libx264",
+          "-crf", "28",
+          "-preset", "veryfast",
+          "output.mp4"
+        ]);
+
+        const output = await ffmpeg.readFile("output.mp4");
+        const blob = new Blob([output.buffer], { type: "video/mp4" });
+
+        processedFile = new File([blob], "compressed.mp4", {
+          type: "video/mp4",
+        });
+
+      } catch (err) {
+        console.error("Video compression failed. Sending original video instead.", err);
+        // fallback: send original file
+        processedFile = mediaFile;
+      }
+    }
+
+    setLoadingText("Sending...");
 
     let mediaUrl = null;
 
-    if (mediaFile) {
+    if (processedFile) {
       try {
         const formData = new FormData();
-        formData.append("file", mediaFile);
+        formData.append("file", processedFile);
         formData.append("upload_preset", UPLOAD_PRESET);
-
-        // ✅ Always set folder (fallback to "uat_chat" if not provided)
         formData.append("folder", FOLDER_NAME || "uat_chat");
 
         const response = await axios.post(
@@ -345,8 +324,9 @@ const Home = () => {
 
         mediaUrl = response.data.secure_url;
       } catch (err) {
-        console.error("❌ Failed to upload to Cloudinary:", err);
+        console.error("Upload failed:", err);
         setUploading(false);
+        setLoadingText("");
         return;
       }
     }
@@ -357,61 +337,54 @@ const Home = () => {
       senderId: currentUser.uid,
       date: new Date(),
       readBy: [currentUser.uid],
-      ...(mediaUrl && { mediaUrl, mediaType, fileName: mediaFile?.name }),
+      ...(mediaUrl && {
+        mediaUrl,
+        mediaType,
+        fileName: processedFile?.name,
+      }),
     };
 
-    const participants = [currentUser.uid, selectedUser.uid];
-    const chatRef = doc(db, "chats", combinedId);
-
     try {
-      const chatSnap = await getDoc(chatRef);
+      // Update Firestore
+      const chatDocRef = doc(db, "chats", chatId);
 
-      if (!chatSnap.exists()) {
-        await setDoc(chatRef, {
-          participants,
-          messages: [newMessage],
-        });
-      } else {
-        const existingMessages = chatSnap.data().messages || [];
-        await updateDoc(chatRef, {
-          messages: [...existingMessages, newMessage],
-          participants,
-        });
-      }
-
-      await setDoc(
-        doc(db, "userChats", currentUser.uid),
-        {
-          [combinedId + ".userInfo"]: {
-            uid: selectedUser.uid,
-            displayName: selectedUser.displayName,
-          },
-          [combinedId + ".date"]: new Date(),
+      await updateDoc(chatDocRef, {
+        messages: arrayUnion(newMessage),
+        lastMessage: {
+          text: text || (mediaType === "image" ? "📷 Image" : "🎥 Video"),
+          senderId: currentUser.uid,
+          date: new Date(),
+          mediaUrl: mediaUrl || null,
+          mediaType: mediaType || null,
         },
-        { merge: true }
-      );
+      });
 
-      await setDoc(
-        doc(db, "userChats", selectedUser.uid),
-        {
-          [combinedId + ".userInfo"]: {
-            uid: currentUser.uid,
-            displayName: currentUser.displayName,
-          },
-          [combinedId + ".date"]: new Date(),
+      // Update user chats metadata
+      const userChatUpdates = {
+        [`${chatId}.lastMessage`]: {
+          text: text || (mediaType === "image" ? "📷 Image" : "🎥 Video"),
+          senderId: currentUser.uid,
+          date: new Date(),
+          mediaUrl: mediaUrl || null,
+          mediaType: mediaType || null,
         },
-        { merge: true }
-      );
+      };
 
-      // Reset inputs
+      await updateDoc(doc(db, "userChats", currentUser.uid), userChatUpdates);
+      await updateDoc(doc(db, "userChats", selectedUser.uid), userChatUpdates);
+
+      // Reset input
       setText("");
       setMediaFile(null);
       setMediaPreview(null);
       setMediaType(null);
-    } catch (err) {
-      console.error("❌ Failed to send message:", err);
-    } finally {
       setUploading(false);
+      setLoadingText("");
+
+    } catch (err) {
+      console.error("Message send failed:", err);
+      setUploading(false);
+      setLoadingText("");
     }
   };
 
