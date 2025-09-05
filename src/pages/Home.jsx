@@ -9,10 +9,10 @@ import {
   setDoc,
   updateDoc,
   getDoc,
-  arrayUnion
+  arrayUnion,
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
-import axios from "axios"; // 🔹 added
+import axios from "axios";
 import "./Home.css";
 import { signOut } from "firebase/auth";
 import { FaArrowLeft, FaUserCircle } from "react-icons/fa";
@@ -27,6 +27,15 @@ import { IoMdSend, IoMdClose } from "react-icons/io";
 import imageCompression from "browser-image-compression";
 import JSZip from "jszip";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
+import {
+  FaFilePdf,
+  FaFileWord,
+  FaFileExcel,
+  FaFilePowerpoint,
+  FaFileAlt,
+  FaFileImage,
+  FaFileVideo,
+} from "react-icons/fa";
 
 const isMobile = () => window.innerWidth <= 768;
 const ffmpeg = new FFmpeg();
@@ -241,7 +250,7 @@ const Home = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setMediaFile(file); // Store original file for later use
+    setMediaFile(file);
 
     if (file.type.startsWith("image/")) {
       setMediaType("image");
@@ -250,9 +259,18 @@ const Home = () => {
       setMediaType("video");
       setMediaPreview(URL.createObjectURL(file));
     } else {
-      // PDFs, docs, txt, xlsx, pptx, etc. all treated as generic files
-      setMediaType("file");
-      setMediaPreview(null); // No preview URL so no broken embed
+      const ext = file.name.split(".").pop().toLowerCase();
+
+      if (ext === "pdf") {
+        setMediaType("pdf");
+        setMediaPreview(URL.createObjectURL(file));
+      } else if (["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) {
+        setMediaType("office");
+        setMediaPreview(URL.createObjectURL(file)); // temporary blob preview
+      } else {
+        setMediaType("file");
+        setMediaPreview(null);
+      }
     }
   };
 
@@ -267,9 +285,10 @@ const Home = () => {
 
   const handleSend = async () => {
     if (!text.trim() && !mediaFile) return;
-    const chatId = currentUser.uid > selectedUser.uid
-      ? currentUser.uid + selectedUser.uid
-      : selectedUser.uid + currentUser.uid;
+    const chatId =
+      currentUser.uid > selectedUser.uid
+        ? currentUser.uid + selectedUser.uid
+        : selectedUser.uid + currentUser.uid;
 
     setUploading(true);
     setLoadingText(mediaType === "video" ? "Compressing..." : "Sending...");
@@ -285,11 +304,15 @@ const Home = () => {
         await ffmpeg.writeFile(mediaFile.name, new Uint8Array(data));
 
         await ffmpeg.exec([
-          "-i", mediaFile.name,
-          "-vcodec", "libx264",
-          "-crf", "28",
-          "-preset", "veryfast",
-          "output.mp4"
+          "-i",
+          mediaFile.name,
+          "-vcodec",
+          "libx264",
+          "-crf",
+          "28",
+          "-preset",
+          "veryfast",
+          "output.mp4",
         ]);
 
         const output = await ffmpeg.readFile("output.mp4");
@@ -298,9 +321,11 @@ const Home = () => {
         processedFile = new File([blob], "compressed.mp4", {
           type: "video/mp4",
         });
-
       } catch (err) {
-        console.error("Video compression failed. Sending original video instead.", err);
+        console.error(
+          "Video compression failed. Sending original video instead.",
+          err
+        );
         // fallback: send original file
         processedFile = mediaFile;
       }
@@ -380,7 +405,6 @@ const Home = () => {
       setMediaType(null);
       setUploading(false);
       setLoadingText("");
-
     } catch (err) {
       console.error("Message send failed:", err);
       setUploading(false);
@@ -461,47 +485,72 @@ const Home = () => {
     return "just now";
   };
 
+  const getFileIcon = (fileName = "") => {
+    const ext = fileName.split(".").pop().toLowerCase();
+
+    switch (ext) {
+      case "pdf":
+        return <FaFilePdf size={24} color="#e53935" />;
+      case "doc":
+      case "docx":
+        return <FaFileWord size={24} color="#1e88e5" />;
+      case "xls":
+      case "xlsx":
+        return <FaFileExcel size={24} color="#43a047" />;
+      case "ppt":
+      case "pptx":
+        return <FaFilePowerpoint size={24} color="#e64a19" />;
+      case "jpg":
+      case "jpeg":
+      case "png":
+      case "gif":
+        return <FaFileImage size={24} color="#fbc02d" />;
+      case "mp4":
+      case "mov":
+      case "avi":
+        return <FaFileVideo size={24} color="#8e24aa" />;
+      default:
+        return <FaFileAlt size={24} color="#757575" />;
+    }
+  };
+
   const renderMediaContent = (msg) => {
     if (!msg.mediaUrl) return null;
 
-    switch (msg.mediaType) {
-      case "image":
-        return (
-          <div className="media-container">
-            <img
-              src={msg.mediaUrl}
-              alt="Shared media"
-              className="chat-media"
-              onClick={() => window.open(msg.mediaUrl, "_blank")}
-            />
-          </div>
-        );
-      case "video":
-        return (
-          <div className="media-container">
-            <video controls className="chat-media">
-              <source src={msg.mediaUrl} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          </div>
-        );
-      case "file":
-        return (
-          <div className="file-container">
-            <a
-              href={msg.mediaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="file-download-link"
-            >
-              <MdAttachFile size={20} />
-              <span>{msg.fileName}</span>
-            </a>
-          </div>
-        );
-      default:
-        return null;
+    const ext = msg.fileName?.split(".").pop().toLowerCase();
+
+    if (msg.mediaType === "image") {
+      return (
+        <img src={msg.mediaUrl} alt="Shared media" className="chat-media" />
+      );
     }
+
+    if (msg.mediaType === "video") {
+      return (
+        <video controls className="chat-media">
+          <source src={msg.mediaUrl} type="video/mp4" />
+        </video>
+      );
+    }
+
+    // 📂 For all docs, pdf, ppt, excel
+    if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext)) {
+      return (
+        <div className="file-message">
+          <div className="file-icon">
+            {getFileIcon(msg.fileName)} {/* Dynamic icon */}
+          </div>
+          <a href={msg.mediaUrl} className="file-details">
+            <span target="_blank" className="file-name" title={msg.fileName}>
+              {msg.fileName?.length > 20
+                ? msg.fileName.substring(0, 20) + "..."
+                : msg.fileName}
+            </span>
+          </a>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -755,32 +804,49 @@ const Home = () => {
                   overflow: "hidden",
                 }}
               >
-                <FaUserCircle size={22} color="#ddd" />
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    overflow: "hidden",
-                    gap: "2px",
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: "15px",
-                      color: "#fff",
+<FaUserCircle size={22} color="#ddd" />
+<div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    gap: "2px",
+  }}
+>
+  <h3
+    style={{
+      margin: 0,
+      fontSize: "15px",
+      color: "#fff",
+      whiteSpace: "nowrap",
+      textOverflow: "ellipsis",
+      overflow: "hidden",
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+    }}
+  >
+    {selectedUser.displayName}
+    <span
+      style={{
+        width: 8,
+        height: 8,
+        borderRadius: "50%",
+        backgroundColor: selectedUser.isOnline ? "#4caf50" : "#9e9e9e",
+        display: "inline-block",
+      }}
+    ></span>
+  </h3>
+  <small
+    style={{
+      color: selectedUser.isOnline ? "#4caf50" : "#9e9e9e",
+      fontSize: "11px",
+    }}
+  >
+    {selectedUser.isOnline ? "Online" : "Offline"}
+  </small>
+</div>
 
-                      whiteSpace: "nowrap",
-                      textOverflow: "ellipsis",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {selectedUser.displayName}
-                  </h3>
-                  <small style={{ color: "#aaa", fontSize: "11px" }}>
-                    {selectedUser.isOnline ? "Online" : "Offline"}
-                  </small>
-                </div>
               </div>
 
               <div
@@ -885,21 +951,14 @@ const Home = () => {
                     className="preview-video"
                   />
                 )}
-
-                {mediaType === "pdf" && (
-                  <embed
-                    src={mediaPreview}
-                    type="application/pdf"
-                    className="preview-pdf"
-                    width="200"
-                    height="150"
-                  />
-                )}
-
-                {mediaType === "file" && (
+                {["pdf", "office", "file"].includes(mediaType) && (
                   <div className="preview-file">
-                    <MdAttachFile size={24} />
-                    <span>{mediaFile?.name}</span>
+                    {getFileIcon(mediaFile?.name)}
+                    <span className="file-name-preview">
+                      {mediaFile?.name?.length > 20
+                        ? mediaFile.name.substring(0, 20) + "..."
+                        : mediaFile?.name}
+                    </span>
                   </div>
                 )}
 
@@ -927,7 +986,7 @@ const Home = () => {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
-                accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+                accept="image/*,video/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx"
                 style={{ display: "none" }}
                 id="file-input"
                 disabled={uploading}

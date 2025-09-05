@@ -860,6 +860,71 @@ margin-left: 15px;
   margin-bottom: 10px;
 }
 
+
+.file-message {
+  display: flex;
+  align-items: center;
+  background: #b71c1c; /* dark red background */
+  padding: 8px 12px;
+  border-radius: 10px;
+  max-width: 250px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.file-icon {
+  margin-right: 10px;
+  font-size: 22px;
+  color: #fff;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-name {
+  font-size: 13px; 
+  font-weight: 500;
+  color: #ffebee;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-name-preview {
+  font-size: 13px; 
+  font-weight: 500;
+  color: #000;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-download {
+  font-size: 12px;
+  font-weight: 400;
+  color: #ffebee;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.file-download:hover {
+  color: #ffcdd2;
+}
+
+.file-message a {
+  color: white;
+  text-decoration: none;
+}
+
+.file-message a:hover {
+  text-decoration: underline;
+}
+
+
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
