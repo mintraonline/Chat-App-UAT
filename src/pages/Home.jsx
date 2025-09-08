@@ -16,7 +16,6 @@ import axios from "axios";
 import "./Home.css";
 import { signOut } from "firebase/auth";
 import { FaArrowLeft, FaUserCircle } from "react-icons/fa";
-import { BsPersonCircle } from "react-icons/bs";
 import {
   MdDeleteOutline,
   MdOutlinePersonOutline,
@@ -25,7 +24,6 @@ import {
 import { FiLogOut } from "react-icons/fi";
 import { IoMdSend, IoMdClose } from "react-icons/io";
 import imageCompression from "browser-image-compression";
-import JSZip from "jszip";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import {
   FaFilePdf,
@@ -88,6 +86,21 @@ const Home = () => {
       setShowSidebar(true);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    const loadFFmpeg = async () => {
+      try {
+        if (!ffmpeg.loaded) {
+          await ffmpeg.load();
+          console.log("FFmpeg loaded successfully");
+        }
+      } catch (err) {
+        console.error("Failed to load FFmpeg:", err);
+      }
+    };
+
+    loadFFmpeg();
+  }, []);
 
   useEffect(() => {
     const filtered = allUsers.filter((user) =>
@@ -251,7 +264,7 @@ const Home = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 50 * 1024 * 1024) { 
+    if (file.size > 50 * 1024 * 1024) {
       setShowFileSizeError(true);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -282,7 +295,6 @@ const Home = () => {
     }
   };
 
-
   const removeMedia = () => {
     setMediaFile(null);
     setMediaPreview(null);
@@ -305,7 +317,6 @@ const Home = () => {
 
     let processedFile = mediaFile;
 
-    // ✅ Image compression
     if (mediaType === "image") {
       try {
         const options = {
@@ -320,44 +331,64 @@ const Home = () => {
       }
     }
 
-    // ✅ Video compression
     if (mediaType === "video") {
       try {
         if (!ffmpeg.loaded) {
+          setLoadingText("Loading compressor...");
           await ffmpeg.load();
         }
 
-        // Write video file into memory
-        const data = await mediaFile.arrayBuffer();
-        await ffmpeg.writeFile("input.mp4", new Uint8Array(data));
+        setLoadingText("Compressing video...");
 
-        // Run compression
+        const data = await mediaFile.arrayBuffer();
+        ffmpeg.writeFile("input.mp4", new Uint8Array(data));
+
         await ffmpeg.exec([
-          "-i", "input.mp4",
-          "-vf", "scale=640:-2,fps=15",
-          "-c:v", "libx264",
-          "-preset", "veryfast",
-          "-crf", "35", 
-          "-c:a", "aac",
-          "-b:a", "48k",
+          "-i",
+          "input.mp4",
+          "-vf",
+          "scale='min(640,iw)':-2",
+          "-r",
+          "15",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "fast",
+          "-crf",
+          "28",
+          "-maxrate",
+          "1M",
+          "-bufsize",
+          "2M",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "64k",
+          "-y",
           "output.mp4",
         ]);
 
         const output = await ffmpeg.readFile("output.mp4");
-        console.log("Compressed size (bytes):", output.length);
-        console.log("Original size (bytes):", mediaFile.size);
 
-        const blob = new Blob([output.buffer], { type: "video/mp4" });
-        processedFile = new File([blob], "compressed.mp4", { type: "video/mp4" });
+        // Check if compression actually reduced size
+        if (output.length < mediaFile.size) {
+          const blob = new Blob([output.buffer], { type: "video/mp4" });
+          processedFile = new File([blob], "compressed.mp4", {
+            type: "video/mp4",
+          });
+          console.log("Video compressed successfully");
+        } else {
+          console.log("Compression didn't reduce size, using original");
+          processedFile = mediaFile;
+        }
       } catch (err) {
         console.error("Video compression failed. Sending original video.", err);
         processedFile = mediaFile;
       }
     }
 
-    setLoadingText("Sending...");
+    setLoadingText("Uploading...");
 
-    // ✅ Upload to Cloudinary
     let mediaUrl = null;
     if (processedFile) {
       try {
@@ -368,7 +399,15 @@ const Home = () => {
 
         const response = await axios.post(
           `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
-          formData
+          formData,
+          {
+            onUploadProgress: (progressEvent) => {
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              setLoadingText(`Uploading: ${percentCompleted}%`);
+            },
+          }
         );
 
         mediaUrl = response.data.secure_url;
@@ -379,7 +418,6 @@ const Home = () => {
         return;
       }
     }
-
     const newMessage = {
       id: Date.now(),
       text,
@@ -554,13 +592,10 @@ const Home = () => {
       );
     }
 
-    // 📂 For all docs, pdf, ppt, excel
     if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext)) {
       return (
         <div className="file-message">
-          <div className="file-icon">
-            {getFileIcon(msg.fileName)} {/* Dynamic icon */}
-          </div>
+          <div className="file-icon">{getFileIcon(msg.fileName)}</div>
           <a href={msg.mediaUrl} className="file-details">
             <span target="_blank" className="file-name" title={msg.fileName}>
               {msg.fileName?.length > 20
@@ -579,21 +614,28 @@ const Home = () => {
       {uploading && (
         <div className="loader-overlay">
           <div className="loader"></div>
-          <p>Sending...</p>
+          <p>{loadingText}</p>
+          {mediaType === "video" && (
+            <p className="compression-note">
+              Video compression may take a minute...
+            </p>
+          )}
         </div>
       )}
-      
+
       {showFileSizeError && (
         <div className="overlay">
           <div className="overlay-content">
             <div className="overlay-icon">⚠️</div>
             <h2>File Too Large</h2>
-            <p>The selected file exceeds the 50 MB limit. Please choose a smaller file.</p>
+            <p>
+              The selected file exceeds the 50 MB limit. Please choose a smaller
+              file.
+            </p>
             <button onClick={() => setShowFileSizeError(false)}>OK</button>
           </div>
         </div>
       )}
-
 
       {!isMobile() && (
         <div className="sidebar">
@@ -826,7 +868,6 @@ const Home = () => {
                 />
               )}
 
-              {/* User Info */}
               <div
                 className="chat-user-name"
                 style={{
@@ -838,49 +879,50 @@ const Home = () => {
                   overflow: "hidden",
                 }}
               >
-<FaUserCircle size={22} color="#ddd" />
-<div
-  style={{
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    gap: "2px",
-  }}
->
-  <h3
-    style={{
-      margin: 0,
-      fontSize: "15px",
-      color: "#fff",
-      whiteSpace: "nowrap",
-      textOverflow: "ellipsis",
-      overflow: "hidden",
-      display: "flex",
-      alignItems: "center",
-      gap: "6px",
-    }}
-  >
-    {selectedUser.displayName}
-    <span
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: "50%",
-        backgroundColor: selectedUser.isOnline ? "#4caf50" : "#9e9e9e",
-        display: "inline-block",
-      }}
-    ></span>
-  </h3>
-  <small
-    style={{
-      color: selectedUser.isOnline ? "#4caf50" : "#9e9e9e",
-      fontSize: "11px",
-    }}
-  >
-    {selectedUser.isOnline ? "Online" : "Offline"}
-  </small>
-</div>
-
+                <FaUserCircle size={22} color="#ddd" />
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                    gap: "2px",
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "15px",
+                      color: "#fff",
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    {selectedUser.displayName}
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        backgroundColor: selectedUser.isOnline
+                          ? "#4caf50"
+                          : "#9e9e9e",
+                        display: "inline-block",
+                      }}
+                    ></span>
+                  </h3>
+                  <small
+                    style={{
+                      color: selectedUser.isOnline ? "#4caf50" : "#9e9e9e",
+                      fontSize: "11px",
+                    }}
+                  >
+                    {selectedUser.isOnline ? "Online" : "Offline"}
+                  </small>
+                </div>
               </div>
 
               <div
