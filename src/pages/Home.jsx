@@ -756,136 +756,285 @@ const Home = () => {
         </div>
       )}
       {isMobile() && showSidebar && (
-        <div className="mobile-modal">
-          <div className="mobile-header">
+        <div
+          className="mobile-modal"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "#fff",
+            zIndex: 1000,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "16px",
+              backgroundColor: "#9b1c1c",
+              color: "white",
+              gap: "12px",
+            }}
+          >
             <button
-              className="back-button"
               onClick={() => setShowSidebar(false)}
-            ></button>
-            <div className="header-profile">
-              <div className="header-avatar">
-                <FaUserCircle size={28} />
+              style={{
+                background: "none",
+                border: "none",
+                padding: "0",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <FaArrowLeft size={20} color="#fff" />
+            </button>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                gap: "12px",
+              }}
+            >
+              <div style={{ flexShrink: 0 }}>
+                <FaUserCircle size={36} />
               </div>
               <div
-                className="header-title"
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  lineHeight: 1.2,
+                  lineHeight: 1.3,
+                  overflow: "hidden",
+                  flex: 1,
+                  minWidth: 0,
                 }}
               >
                 <div
                   style={{
                     fontWeight: "bold",
                     color: "#fff",
-                    fontSize: "15px",
+                    fontSize: "16px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
                   {currentUser?.displayName}
                 </div>
-                <small
+                <div
                   style={{
-                    fontSize: "11px",
-                    color: "#ddd",
-                    fontStyle: "italic",
+                    fontSize: "13px",
+                    color: "#eee",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    marginTop: "2px",
                   }}
                 >
                   {currentUser?.email}
-                </small>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    marginTop: "4px",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      backgroundColor: "#4caf50",
+                      display: "inline-block",
+                      flexShrink: 0,
+                    }}
+                  ></span>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#4caf50",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Online
+                  </span>
+                </div>
               </div>
             </div>
-            <button className="logout-button-phone" onClick={handleLogout}>
-              <FiLogOut size={22} />
+            <button
+              onClick={handleLogout}
+              style={{
+                background: "none",
+                border: "none",
+                padding: "0",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <FiLogOut size={22} color="#fff" />
             </button>
           </div>
-          <div className="search-wrapper">
+
+          {/* Search */}
+          <div
+            style={{
+              padding: "16px",
+              position: "relative",
+              backgroundColor: "#f5f5f5",
+            }}
+          >
             <input
               type="text"
-              className="search-bar"
-              placeholder="Search"
+              placeholder="Search users..."
               value={searchTerm}
-              onFocus={(e) => {
-                setTimeout(() => {
-                  e.target.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center",
-                  });
-                }, 300);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
               onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px 45px 12px 16px",
+                borderRadius: "25px",
+                border: "1px solid #ddd",
+                fontSize: "15px",
+                outline: "none",
+              }}
             />
-            <span className="search-icon">🔍</span>
+            <span
+              style={{
+                position: "absolute",
+                right: "30px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#999",
+                fontSize: "18px",
+              }}
+            >
+              🔍
+            </span>
           </div>
 
-          <div className="user-list-mobile">
+          {/* User List */}
+          <div
+            style={{
+              overflowY: "auto",
+              flex: 1,
+              backgroundColor: "#fff",
+            }}
+          >
             {users.map((user) => (
               <div
                 key={user.uid}
-                className="user-row"
                 onClick={() => handleSelectUser(user)}
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  padding: "8px 12px",
+                  padding: "16px",
+                  borderBottom: "1px solid #f0f0f0",
+                  cursor: "pointer",
+                  backgroundColor: "#fff",
+                  counterReset: "none", // Explicitly reset any counters
                 }}
               >
                 <div
-                  className="left-user"
-                  style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
+                    flex: 1,
+                    minWidth: 0,
+                  }}
                 >
-                  <div className="header-avatar-phone">
-                    <MdOutlinePersonOutline color="white" size={28} />
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: "50%",
+                      backgroundColor: "#9b1c1c",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      color: "white",
+                      fontWeight: "bold",
+                      fontSize: "18px",
+                    }}
+                  >
+                    {user.displayName?.charAt(0)?.toUpperCase() || "U"}
                   </div>
-                  <div className="user-text" style={{ fontWeight: 500 }}>
+                  <div
+                    style={{
+                      fontWeight: 500,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: "16px",
+                      color: "#333",
+                    }}
+                  >
                     {user.displayName}
                   </div>
                 </div>
                 <div
-                  className="right-info"
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "flex-end",
-                    gap: 2,
+                    gap: "4px",
+                    flexShrink: 0,
+                    marginLeft: "12px",
                   }}
                 >
                   <div
-                    className="status-section"
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
                   >
-                    <div
-                      className="status-section"
-                      style={{ display: "flex", alignItems: "center", gap: 4 }}
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        backgroundColor: user.isOnline ? "#4caf50" : "#9e9e9e",
+                        display: "inline-block",
+                        flexShrink: 0,
+                      }}
+                    ></span>
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: user.isOnline ? "#4caf50" : "#9e9e9e",
+                        whiteSpace: "nowrap",
+                        fontWeight: "500",
+                      }}
                     >
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          backgroundColor: user.isOnline
-                            ? "#4caf50"
-                            : "#9e9e9e",
-                          display: "inline-block",
-                        }}
-                      ></span>
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          color: user.isOnline ? "#4caf50" : "#9e9e9e",
-                        }}
-                      >
-                        {user.isOnline ? "Online" : "Offline"}
-                      </span>
-                    </div>
+                      {user.isOnline ? "Online" : "Offline"}
+                    </span>
                   </div>
-                  <div className="user-time" style={{ fontSize: "11px" }}>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#666",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {lastMessageMap[user.uid]
                       ? new Date(lastMessageMap[user.uid]).toLocaleTimeString(
                           [],
@@ -991,7 +1140,7 @@ const Home = () => {
                   onClick={handleDeleteAllMessages}
                   style={{
                     backgroundColor: "#e53935",
-                    color: "#fff",
+                    color: "white",
                     border: "none",
                     borderRadius: "6px",
                     padding: "6px 10px",
