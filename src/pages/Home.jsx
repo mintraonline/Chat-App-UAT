@@ -579,16 +579,60 @@ const Home = () => {
     const ext = msg.fileName?.split(".").pop().toLowerCase();
 
     if (msg.mediaType === "image") {
+      const handleDownload = async () => {
+        try {
+          const response = await fetch(msg.mediaUrl, { mode: "cors" });
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = msg.fileName || "image.jpg";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error("Download failed:", err);
+        }
+      };
+
       return (
-        <img src={msg.mediaUrl} alt="Shared media" className="chat-media" />
+        <img
+          src={msg.mediaUrl}
+          alt="Shared media"
+          className="chat-media"
+          style={{ cursor: "pointer" }}
+          onClick={handleDownload}
+        />
       );
     }
 
     if (msg.mediaType === "video") {
+      const handleDownload = async () => {
+        try {
+          const response = await fetch(msg.mediaUrl, { mode: "cors" });
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = msg.fileName || "video.mp4"; // fallback name
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error("Video download failed:", err);
+        }
+      };
+
       return (
-        <video controls className="chat-media">
-          <source src={msg.mediaUrl} type="video/mp4" />
-        </video>
+        <video
+          src={msg.mediaUrl}
+          controls
+          className="chat-media"
+          style={{ cursor: "pointer" }}
+          onClick={handleDownload}
+        />
       );
     }
 
