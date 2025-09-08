@@ -521,6 +521,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 1rem;
+  scroll-behavior: smooth;
 }
 .mobile-chat-container {
   display: flex;

@@ -63,6 +63,17 @@ const Home = () => {
   const [loadingText, setLoadingText] = useState("");
   const [showFileSizeError, setShowFileSizeError] = useState(false);
   const fileInputRef = useRef(null);
+  const chatBodyRef = useRef(null);
+
+  const scrollToBottom = () => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+    }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chats, selectedUser]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -1015,7 +1026,7 @@ const Home = () => {
           className="mobile-chat-container"
           style={{ display: "flex", flexDirection: "column", height: "85%" }}
         >
-          <div className="chat-body scrollable-chat-body">
+          <div className="chat-body scrollable-chat-body" ref={chatBodyRef}>
             {chats.map((msg) => (
               <div
                 key={msg.id}
