@@ -370,7 +370,6 @@ const Home = () => {
 
         const output = await ffmpeg.readFile("output.mp4");
 
-        // Check if compression actually reduced size
         if (output.length < mediaFile.size) {
           const blob = new Blob([output.buffer], { type: "video/mp4" });
           processedFile = new File([blob], "compressed.mp4", {
