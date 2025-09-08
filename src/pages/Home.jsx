@@ -63,6 +63,7 @@ const Home = () => {
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
+  const [showFileSizeError, setShowFileSizeError] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -250,6 +251,14 @@ const Home = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (file.size > 50 * 1024 * 1024) { 
+      setShowFileSizeError(true);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
     setMediaFile(file);
 
     if (file.type.startsWith("image/")) {
@@ -260,19 +269,19 @@ const Home = () => {
       setMediaPreview(URL.createObjectURL(file));
     } else {
       const ext = file.name.split(".").pop().toLowerCase();
-
       if (ext === "pdf") {
         setMediaType("pdf");
         setMediaPreview(URL.createObjectURL(file));
       } else if (["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) {
         setMediaType("office");
-        setMediaPreview(URL.createObjectURL(file)); // temporary blob preview
+        setMediaPreview(URL.createObjectURL(file));
       } else {
         setMediaType("file");
         setMediaPreview(null);
       }
     }
   };
+
 
   const removeMedia = () => {
     setMediaFile(null);
@@ -285,6 +294,7 @@ const Home = () => {
 
   const handleSend = async () => {
     if (!text.trim() && !mediaFile) return;
+
     const chatId =
       currentUser.uid > selectedUser.uid
         ? currentUser.uid + selectedUser.uid
@@ -295,45 +305,60 @@ const Home = () => {
 
     let processedFile = mediaFile;
 
+    // ✅ Image compression
+    if (mediaType === "image") {
+      try {
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1280,
+          useWebWorker: true,
+        };
+        processedFile = await imageCompression(mediaFile, options);
+      } catch (err) {
+        console.error("Image compression failed, sending original.", err);
+        processedFile = mediaFile;
+      }
+    }
+
+    // ✅ Video compression
     if (mediaType === "video") {
       try {
-        if (!ffmpeg.isLoaded()) await ffmpeg.load();
+        if (!ffmpeg.loaded) {
+          await ffmpeg.load();
+        }
 
+        // Write video file into memory
         const data = await mediaFile.arrayBuffer();
-        await ffmpeg.writeFile(mediaFile.name, new Uint8Array(data));
+        await ffmpeg.writeFile("input.mp4", new Uint8Array(data));
 
+        // Run compression
         await ffmpeg.exec([
-          "-i",
-          mediaFile.name,
-          "-vcodec",
-          "libx264",
-          "-crf",
-          "28",
-          "-preset",
-          "veryfast",
+          "-i", "input.mp4",
+          "-vf", "scale=640:-2,fps=15",
+          "-c:v", "libx264",
+          "-preset", "veryfast",
+          "-crf", "35", 
+          "-c:a", "aac",
+          "-b:a", "48k",
           "output.mp4",
         ]);
 
         const output = await ffmpeg.readFile("output.mp4");
-        const blob = new Blob([output.buffer], { type: "video/mp4" });
+        console.log("Compressed size (bytes):", output.length);
+        console.log("Original size (bytes):", mediaFile.size);
 
-        processedFile = new File([blob], "compressed.mp4", {
-          type: "video/mp4",
-        });
+        const blob = new Blob([output.buffer], { type: "video/mp4" });
+        processedFile = new File([blob], "compressed.mp4", { type: "video/mp4" });
       } catch (err) {
-        console.error(
-          "Video compression failed. Sending original video instead.",
-          err
-        );
-        // fallback: send original file
+        console.error("Video compression failed. Sending original video.", err);
         processedFile = mediaFile;
       }
     }
 
     setLoadingText("Sending...");
 
+    // ✅ Upload to Cloudinary
     let mediaUrl = null;
-
     if (processedFile) {
       try {
         const formData = new FormData();
@@ -557,6 +582,19 @@ const Home = () => {
           <p>Sending...</p>
         </div>
       )}
+      
+      {showFileSizeError && (
+        <div className="overlay">
+          <div className="overlay-content">
+            <div className="overlay-icon">⚠️</div>
+            <h2>File Too Large</h2>
+            <p>The selected file exceeds the 50 MB limit. Please choose a smaller file.</p>
+            <button onClick={() => setShowFileSizeError(false)}>OK</button>
+          </div>
+        </div>
+      )}
+
+
       {!isMobile() && (
         <div className="sidebar">
           <div className="sidebar-header">
