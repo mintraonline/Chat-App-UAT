@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import { AuthContext } from "../context/AuthContext";
 import {
   collection,
@@ -9,19 +9,42 @@ import {
   setDoc,
   updateDoc,
   getDoc,
+  arrayUnion,
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
+import axios from "axios";
 import "./Home.css";
 import { signOut } from "firebase/auth";
-import { FaArrowLeft, FaUserCircle } from "react-icons/fa";
-import { BsPersonCircle } from "react-icons/bs";
-import { MdDeleteOutline, MdOutlinePersonOutline } from "react-icons/md";
+import { FaArrowLeft, FaMusic, FaUserCircle } from "react-icons/fa";
+import {
+  MdDeleteOutline,
+  MdOutlinePersonOutline,
+  MdAttachFile,
+} from "react-icons/md";
 import { FiLogOut } from "react-icons/fi";
-import { IoMdSend } from "react-icons/io";
+import { IoMdSend, IoMdClose } from "react-icons/io";
+import imageCompression from "browser-image-compression";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import {
+  FaFilePdf,
+  FaFileWord,
+  FaFileExcel,
+  FaFilePowerpoint,
+  FaFileAlt,
+  FaFileImage,
+  FaFileVideo,
+} from "react-icons/fa";
+import MediaModal from "../components/MediaModal";
 
 const isMobile = () => window.innerWidth <= 768;
+const ffmpeg = new FFmpeg();
 
 const Home = () => {
+  const CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || "demo";
+  const UPLOAD_PRESET =
+    process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET || "chat_media";
+  const FOLDER_NAME = process.env.REACT_APP_CLOUDINARY_FOLDER;
+
   const { currentUser } = useContext(AuthContext);
   const [allUsers, setAllUsers] = useState([]);
   const [users, setUsers] = useState([]);
@@ -33,6 +56,28 @@ const Home = () => {
   const [unreadMap, setUnreadMap] = useState({});
   const [lastMessageMap, setLastMessageMap] = useState({});
   const [showSidebar, setShowSidebar] = useState(false);
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [mediaType, setMediaType] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [loadingText, setLoadingText] = useState("");
+  const [showFileSizeError, setShowFileSizeError] = useState(false);
+  const [showMediaModal, setShowMediaModal] = useState(false);
+  const [modalMedia, setModalMedia] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+
+  const fileInputRef = useRef(null);
+  const chatBodyRef = useRef(null);
+
+  const scrollToBottom = () => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+    }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chats, selectedUser]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -56,6 +101,21 @@ const Home = () => {
       setShowSidebar(true);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    const loadFFmpeg = async () => {
+      try {
+        if (!ffmpeg.loaded) {
+          await ffmpeg.load();
+          console.log("FFmpeg loaded successfully");
+        }
+      } catch (err) {
+        console.error("Failed to load FFmpeg:", err);
+      }
+    };
+
+    loadFFmpeg();
+  }, []);
 
   useEffect(() => {
     const filtered = allUsers.filter((user) =>
@@ -118,6 +178,7 @@ const Home = () => {
     signOut(auth).catch((err) => console.error("Logout failed:", err));
     localStorage.removeItem("selectedUser");
   };
+
   useEffect(() => {
     if (!selectedUser) return;
     const combinedId =
@@ -133,6 +194,11 @@ const Home = () => {
 
   const handleSelectUser = async (user) => {
     setSelectedUser(user);
+    setText("");
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType(null);
+
     localStorage.setItem("selectedUser", JSON.stringify(user));
     if (isMobile()) setShowSidebar(false);
 
@@ -209,72 +275,235 @@ const Home = () => {
     }
   };
 
-  const handleSend = async () => {
-    if (!text.trim()) return;
+const handleFileSelect = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    const combinedId =
-      currentUser.uid > selectedUser.uid
-        ? currentUser.uid + selectedUser.uid
-        : selectedUser.uid + currentUser.uid;
+  if (file.size > 100 * 1024 * 1024) {
+    setShowFileSizeError(true);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    return;
+  }
 
-    const newMessage = {
-      id: Date.now(),
-      text,
-      senderId: currentUser.uid,
-      date: new Date(),
-      readBy: [currentUser.uid],
-    };
+  setMediaFile(file);
 
-    const participants = [currentUser.uid, selectedUser.uid];
-    const chatRef = doc(db, "chats", combinedId);
+  if (file.type.startsWith("image/")) {
+    setMediaType("image");
+    setMediaPreview(URL.createObjectURL(file));
+  } else if (file.type.startsWith("video/")) {
+    setMediaType("video");
+    setMediaPreview(URL.createObjectURL(file));
+  } else if (file.type.startsWith("audio/")) {
+    setMediaType("audio");
+    setMediaPreview(URL.createObjectURL(file));
+  } else {
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (ext === "pdf") {
+      setMediaType("pdf");
+      setMediaPreview(URL.createObjectURL(file));
+    } else if (["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) {
+      setMediaType("office");
+      setMediaPreview(URL.createObjectURL(file));
+    } else {
+      setMediaType("file");
+      setMediaPreview(null);
+    }
+  }
+};
 
-    try {
-      const chatSnap = await getDoc(chatRef);
 
-      if (!chatSnap.exists()) {
-        await setDoc(chatRef, {
-          participants,
-          messages: [newMessage],
-        });
-      } else {
-        await ensureParticipantsExist(chatRef, participants);
-        const existingMessages = chatSnap.data().messages || [];
-
-        await updateDoc(chatRef, {
-          messages: [...existingMessages, newMessage],
-          participants,
-        });
-      }
-
-      await setDoc(
-        doc(db, "userChats", currentUser.uid),
-        {
-          [combinedId + ".userInfo"]: {
-            uid: selectedUser.uid,
-            displayName: selectedUser.displayName,
-          },
-          [combinedId + ".date"]: new Date(),
-        },
-        { merge: true }
-      );
-
-      await setDoc(
-        doc(db, "userChats", selectedUser.uid),
-        {
-          [combinedId + ".userInfo"]: {
-            uid: currentUser.uid,
-            displayName: currentUser.displayName,
-          },
-          [combinedId + ".date"]: new Date(),
-        },
-        { merge: true }
-      );
-
-      setText("");
-    } catch (err) {
-      console.error("❌ Failed to send message:", err);
+  const removeMedia = () => {
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
+
+const handleSend = async () => {
+  if (!text.trim() && !mediaFile) return;
+
+  const chatId =
+    currentUser.uid > selectedUser.uid
+      ? currentUser.uid + selectedUser.uid
+      : selectedUser.uid + currentUser.uid;
+
+  setUploading(true);
+  setLoadingText(mediaType === "video" ? "Compressing..." : "Sending...");
+
+  let processedFile = mediaFile;
+
+  // --- Image compression ---
+  if (mediaType === "image" && mediaFile) {
+    try {
+      const options = { maxSizeMB: 1, maxWidthOrHeight: 1280, useWebWorker: true };
+      processedFile = await imageCompression(mediaFile, options);
+    } catch (err) {
+      console.error("Image compression failed; sending original.", err);
+      processedFile = mediaFile;
+    }
+  }
+
+  // --- Video compression (ffmpeg) ---
+  if (mediaType === "video" && mediaFile) {
+    try {
+      if (!ffmpeg.loaded) {
+        setLoadingText("Loading compressor...");
+        await ffmpeg.load();
+      }
+      setLoadingText("Compressing video...");
+
+      const data = await mediaFile.arrayBuffer();
+      // write/read using FFmpeg API compatible methods
+      // depending on ffmpeg wrapper usage: using writeFile/readFile or FS as in examples
+      // if your ffmpeg instance exposes writeFile/readFile use those. Below assumes writeFile/exec/readFile.
+      ffmpeg.writeFile("input.mp4", new Uint8Array(data));
+
+      await ffmpeg.exec([
+        "-i","input.mp4",
+        "-vf","scale='min(640,iw)':-2",
+        "-r","15",
+        "-c:v","libx264",
+        "-preset","fast",
+        "-crf","28",
+        "-maxrate","1M",
+        "-bufsize","2M",
+        "-c:a","aac",
+        "-b:a","64k",
+        "-y","output.mp4",
+      ]);
+
+      const output = await ffmpeg.readFile("output.mp4");
+      if (output && output.length < mediaFile.size) {
+        const blob = new Blob([output.buffer], { type: "video/mp4" });
+        processedFile = new File([blob], "compressed.mp4", { type: "video/mp4" });
+        console.log("Video compressed successfully");
+      } else {
+        console.log("Compression didn't reduce size; using original");
+        processedFile = mediaFile;
+      }
+
+      // optional cleanup
+      try {
+        ffmpeg.unlink && ffmpeg.unlink("input.mp4");
+        ffmpeg.unlink && ffmpeg.unlink("output.mp4");
+      } catch {}
+    } catch (err) {
+      console.error("Video compression failed; sending original.", err);
+      processedFile = mediaFile;
+    }
+  }
+
+  setLoadingText("Uploading...");
+
+  let mediaUrl = null;
+  try {
+    if (processedFile) {
+      const ext = processedFile?.name?.split(".").pop()?.toLowerCase();
+      const isPdf = ext === "pdf";
+
+      // pick endpoint based on file type:
+      const endpoint = isPdf
+        ? `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`
+        : `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`;
+
+      const formData = new FormData();
+      formData.append("file", processedFile);
+      formData.append("upload_preset", UPLOAD_PRESET);
+      formData.append("folder", FOLDER_NAME || "uat_chat");
+
+      // For PDFs we use the raw endpoint (above). DO NOT append access_mode for unsigned uploads.
+      if (isPdf) {
+        // optional: you can append resource_type but calling raw/upload is enough:
+        // formData.append('resource_type', 'raw');
+      }
+
+      const response = await axios.post(endpoint, formData, {
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setLoadingText(`Uploading: ${percent}%`);
+          }
+        },
+      });
+
+      console.log("cloudinary upload response", response.data);
+      mediaUrl = response.data.secure_url || response.data.url;
+      if (!mediaUrl) throw new Error("No media URL returned by Cloudinary");
+    }
+  } catch (err) {
+    console.error("Upload failed:", err);
+    // Show Cloudinary error details if present
+    const cloudErr = err?.response?.data?.error?.message || err.message;
+    setUploadError(cloudErr);
+    setUploading(false);
+    setLoadingText("");
+    return;
+  }
+
+  // Build message and write to Firestore
+  const newMessage = {
+    id: Date.now(),
+    text,
+    senderId: currentUser.uid,
+    date: new Date(),
+    readBy: [currentUser.uid],
+    ...(mediaUrl && { mediaUrl, mediaType, fileName: processedFile?.name }),
+  };
+
+  try {
+    const chatDocRef = doc(db, "chats", chatId);
+
+    await updateDoc(chatDocRef, {
+      messages: arrayUnion(newMessage),
+      lastMessage: {
+        text:
+          text ||
+          (mediaType === "image"
+            ? "📷 Image"
+            : mediaType === "video"
+            ? "🎥 Video"
+            : mediaType === "audio"
+            ? "🎵 Audio"
+            : "📎 File"),
+        senderId: currentUser.uid,
+        date: new Date(),
+        mediaUrl: mediaUrl || null,
+        mediaType: mediaType || null,
+      },
+    });
+
+    const userChatUpdates = {
+      [`${chatId}.lastMessage`]: {
+        text: text || (mediaType === "image" ? "📷 Image" : "🎥 Video"),
+        senderId: currentUser.uid,
+        date: new Date(),
+        mediaUrl: mediaUrl || null,
+        mediaType: mediaType || null,
+      },
+    };
+
+    await updateDoc(doc(db, "userChats", currentUser.uid), userChatUpdates);
+    await updateDoc(doc(db, "userChats", selectedUser.uid), userChatUpdates);
+
+    // Reset UI
+    setText("");
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType(null);
+    if (fileInputRef?.current) fileInputRef.current.value = "";
+    setUploading(false);
+    setLoadingText("");
+  } catch (err) {
+    console.error("Message send failed:", err);
+    setUploading(false);
+    setLoadingText("");
+  }
+};
+
 
   const handleDeleteMessage = async (messageId) => {
     const combinedId =
@@ -349,8 +578,134 @@ const Home = () => {
     return "just now";
   };
 
+  const getFileIcon = (fileName = "") => {
+    const ext = fileName.split(".").pop().toLowerCase();
+
+    switch (ext) {
+      case "pdf":
+        return <FaFilePdf size={24} color="#e53935" />;
+      case "doc":
+      case "docx":
+        return <FaFileWord size={24} color="#1e88e5" />;
+      case "xls":
+      case "xlsx":
+        return <FaFileExcel size={24} color="#43a047" />;
+      case "ppt":
+      case "pptx":
+        return <FaFilePowerpoint size={24} color="#e64a19" />;
+      case "jpg":
+      case "jpeg":
+      case "png":
+      case "gif":
+        return <FaFileImage size={24} color="#fbc02d" />;
+      case "mp4":
+      case "mov":
+      case "avi":
+        return <FaFileVideo size={24} color="#8e24aa" />;
+      case "mp3":
+      case "wav":
+      case "aac":
+      case "ogg":
+        return <FaMusic size={24} color="#ff9800" />; 
+      default:
+        return <FaFileAlt size={24} color="#757575" />;
+    }
+  };
+
+const renderMediaContent = (msg) => {
+  if (!msg.mediaUrl) return null;
+
+  const handleOpenModal = () => {
+    setModalMedia({
+      url: msg.mediaUrl,
+      type: msg.mediaType,
+      fileName: msg.fileName,
+    });
+    setShowMediaModal(true);
+  };
+
+  if (msg.mediaType === "image") {
+    return (
+      <img
+        src={msg.mediaUrl}
+        alt="Shared media"
+        className="chat-media"
+        style={{ cursor: "pointer" }}
+        onClick={handleOpenModal}
+      />
+    );
+  }
+
+  if (msg.mediaType === "video") {
+    return (
+      <video
+        src={msg.mediaUrl}
+        className="chat-media"
+        controls
+        style={{ cursor: "pointer" }}
+      />
+    );
+  }
+
+  if (msg.mediaType === "audio") {
+    return (
+      <div className="audio-message" onClick={handleOpenModal}>
+        <div className="audio-inner">
+          <audio controls>
+            <source src={msg.mediaUrl} type="audio/mpeg" />
+          </audio>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="file-message" onClick={handleOpenModal}>
+      <div className="file-icon">{getFileIcon(msg.fileName)}</div>
+      <span className="file-name">{msg.fileName}</span>
+    </div>
+  );
+};
+
   return (
     <div className="chat-app">
+      {uploading && (
+        <div className="loader-overlay">
+          <div className="loader"></div>
+          <p>{loadingText}</p>
+          {mediaType === "video" && (
+            <p className="compression-note">
+              Video compression may take a minute...
+            </p>
+          )}
+        </div>
+      )}
+
+      {showFileSizeError && (
+        <div className="overlay">
+          <div className="overlay-content">
+            <div className="overlay-icon">⚠️</div>
+            <h2>File Too Large</h2>
+            <p>
+              The selected file exceeds the 100 MB limit. Please choose a smaller
+              file.
+            </p>
+            <button onClick={() => setShowFileSizeError(false)}>OK</button>
+          </div>
+        </div>
+      )}
+
+      {uploadError && (
+        <div className="overlay">
+          <div className="overlay-content">
+            <div className="overlay-icon">❌</div>
+            <h2>Upload Failed</h2>
+            <p>{uploadError}</p>
+            <button onClick={() => setUploadError(null)}>OK</button>
+          </div>
+        </div>
+      )}
+      
       {!isMobile() && (
         <div className="sidebar">
           <div className="sidebar-header">
@@ -416,136 +771,285 @@ const Home = () => {
         </div>
       )}
       {isMobile() && showSidebar && (
-        <div className="mobile-modal">
-          <div className="mobile-header">
+        <div
+          className="mobile-modal"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "#fff",
+            zIndex: 1000,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "16px",
+              backgroundColor: "#9b1c1c",
+              color: "white",
+              gap: "12px",
+            }}
+          >
             <button
-              className="back-button"
               onClick={() => setShowSidebar(false)}
-            ></button>
-            <div className="header-profile">
-              <div className="header-avatar">
-                <FaUserCircle size={28} />
+              style={{
+                background: "none",
+                border: "none",
+                padding: "0",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <FaArrowLeft size={20} color="#fff" />
+            </button>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                gap: "12px",
+              }}
+            >
+              <div style={{ flexShrink: 0 }}>
+                <FaUserCircle size={36} />
               </div>
               <div
-                className="header-title"
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  lineHeight: 1.2,
+                  lineHeight: 1.3,
+                  overflow: "hidden",
+                  flex: 1,
+                  minWidth: 0,
                 }}
               >
                 <div
                   style={{
                     fontWeight: "bold",
                     color: "#fff",
-                    fontSize: "15px",
+                    fontSize: "16px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
                   {currentUser?.displayName}
                 </div>
-                <small
+                <div
                   style={{
-                    fontSize: "11px",
-                    color: "#ddd",
-                    fontStyle: "italic",
+                    fontSize: "13px",
+                    color: "#eee",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    marginTop: "2px",
                   }}
                 >
                   {currentUser?.email}
-                </small>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    marginTop: "4px",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      backgroundColor: "#4caf50",
+                      display: "inline-block",
+                      flexShrink: 0,
+                    }}
+                  ></span>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#4caf50",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Online
+                  </span>
+                </div>
               </div>
             </div>
-            <button className="logout-button-phone" onClick={handleLogout}>
-              <FiLogOut size={22} />
+            <button
+              onClick={handleLogout}
+              style={{
+                background: "none",
+                border: "none",
+                padding: "0",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <FiLogOut size={22} color="#fff" />
             </button>
           </div>
-          <div className="search-wrapper">
+
+          {/* Search */}
+          <div
+            style={{
+              padding: "16px",
+              position: "relative",
+              backgroundColor: "#f5f5f5",
+            }}
+          >
             <input
               type="text"
-              className="search-bar"
-              placeholder="Search"
+              placeholder="Search users..."
               value={searchTerm}
-              onFocus={(e) => {
-                setTimeout(() => {
-                  e.target.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center", 
-                  });
-                }, 300);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
               onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px 45px 12px 16px",
+                borderRadius: "25px",
+                border: "1px solid #ddd",
+                fontSize: "15px",
+                outline: "none",
+              }}
             />
-            <span className="search-icon">🔍</span>
+            <span
+              style={{
+                position: "absolute",
+                right: "30px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#999",
+                fontSize: "18px",
+              }}
+            >
+              🔍
+            </span>
           </div>
 
-          <div className="user-list-mobile">
+          {/* User List */}
+          <div
+            style={{
+              overflowY: "auto",
+              flex: 1,
+              backgroundColor: "#fff",
+            }}
+          >
             {users.map((user) => (
               <div
                 key={user.uid}
-                className="user-row"
                 onClick={() => handleSelectUser(user)}
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  padding: "8px 12px",
+                  padding: "16px",
+                  borderBottom: "1px solid #f0f0f0",
+                  cursor: "pointer",
+                  backgroundColor: "#fff",
+                  counterReset: "none", // Explicitly reset any counters
                 }}
               >
                 <div
-                  className="left-user"
-                  style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
+                    flex: 1,
+                    minWidth: 0,
+                  }}
                 >
-                  <div className="header-avatar-phone">
-                    <MdOutlinePersonOutline color="white" size={28} />
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: "50%",
+                      backgroundColor: "#9b1c1c",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      color: "white",
+                      fontWeight: "bold",
+                      fontSize: "18px",
+                    }}
+                  >
+                    {user.displayName?.charAt(0)?.toUpperCase() || "U"}
                   </div>
-                  <div className="user-text" style={{ fontWeight: 500 }}>
+                  <div
+                    style={{
+                      fontWeight: 500,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: "16px",
+                      color: "#333",
+                    }}
+                  >
                     {user.displayName}
                   </div>
                 </div>
                 <div
-                  className="right-info"
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "flex-end",
-                    gap: 2,
+                    gap: "4px",
+                    flexShrink: 0,
+                    marginLeft: "12px",
                   }}
                 >
                   <div
-                    className="status-section"
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
                   >
-                    <div
-                      className="status-section"
-                      style={{ display: "flex", alignItems: "center", gap: 4 }}
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        backgroundColor: user.isOnline ? "#4caf50" : "#9e9e9e",
+                        display: "inline-block",
+                        flexShrink: 0,
+                      }}
+                    ></span>
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: user.isOnline ? "#4caf50" : "#9e9e9e",
+                        whiteSpace: "nowrap",
+                        fontWeight: "500",
+                      }}
                     >
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          backgroundColor: user.isOnline
-                            ? "#4caf50"
-                            : "#9e9e9e",
-                          display: "inline-block",
-                        }}
-                      ></span>
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          color: user.isOnline ? "#4caf50" : "#9e9e9e",
-                        }}
-                      >
-                        {user.isOnline ? "Online" : "Offline"}
-                      </span>
-                    </div>
+                      {user.isOnline ? "Online" : "Offline"}
+                    </span>
                   </div>
-                  <div className="user-time" style={{ fontSize: "11px" }}>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#666",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {lastMessageMap[user.uid]
                       ? new Date(lastMessageMap[user.uid]).toLocaleTimeString(
                           [],
@@ -582,7 +1086,6 @@ const Home = () => {
                 />
               )}
 
-              {/* User Info */}
               <div
                 className="chat-user-name"
                 style={{
@@ -608,15 +1111,33 @@ const Home = () => {
                       margin: 0,
                       fontSize: "15px",
                       color: "#fff",
-
                       whiteSpace: "nowrap",
                       textOverflow: "ellipsis",
                       overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
                     }}
                   >
                     {selectedUser.displayName}
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        backgroundColor: selectedUser.isOnline
+                          ? "#4caf50"
+                          : "#9e9e9e",
+                        display: "inline-block",
+                      }}
+                    ></span>
                   </h3>
-                  <small style={{ color: "#aaa", fontSize: "11px" }}>
+                  <small
+                    style={{
+                      color: selectedUser.isOnline ? "#4caf50" : "#9e9e9e",
+                      fontSize: "11px",
+                    }}
+                  >
                     {selectedUser.isOnline ? "Online" : "Offline"}
                   </small>
                 </div>
@@ -634,7 +1155,7 @@ const Home = () => {
                   onClick={handleDeleteAllMessages}
                   style={{
                     backgroundColor: "#e53935",
-                    color: "#fff",
+                    color: "white",
                     border: "none",
                     borderRadius: "6px",
                     padding: "6px 10px",
@@ -669,7 +1190,7 @@ const Home = () => {
           className="mobile-chat-container"
           style={{ display: "flex", flexDirection: "column", height: "85%" }}
         >
-          <div className="chat-body scrollable-chat-body">
+          <div className="chat-body scrollable-chat-body" ref={chatBodyRef}>
             {chats.map((msg) => (
               <div
                 key={msg.id}
@@ -698,7 +1219,8 @@ const Home = () => {
                             }))}
                     </span>
                   </div>
-                  <div className="message-text">{msg.text}</div>
+                  {renderMediaContent(msg)}
+                  {msg.text && <div className="message-text">{msg.text}</div>}
                 </div>
               </div>
             ))}
@@ -706,6 +1228,43 @@ const Home = () => {
         </div>
         {selectedUser && (
           <div className="chat-input-wrapper">
+            {mediaPreview && (
+              <div className="media-preview">
+                {mediaType === "image" && (
+                  <img
+                    src={mediaPreview}
+                    alt="Preview"
+                    className="preview-image"
+                  />
+                )}
+
+                {mediaType === "video" && (
+                  <video
+                    src={mediaPreview}
+                    controls
+                    className="preview-video"
+                  />
+                )}
+                {mediaType === "audio" && (
+                  <audio src={mediaPreview} controls className="preview-audio" />
+                )}
+                {["pdf", "office", "file"].includes(mediaType) && (
+                  <div className="preview-file">
+                    {getFileIcon(mediaFile?.name)}
+                    <span className="file-name-preview">
+                      {mediaFile?.name?.length > 20
+                        ? mediaFile.name.substring(0, 20) + "..."
+                        : mediaFile?.name}
+                    </span>
+                  </div>
+                )}
+
+                <button className="remove-media-btn" onClick={removeMedia}>
+                  <IoMdClose size={16} />
+                </button>
+              </div>
+            )}
+
             <div className="chat-input-field">
               <input
                 type="text"
@@ -718,12 +1277,26 @@ const Home = () => {
                   }
                 }}
                 placeholder="Type a message..."
+                disabled={uploading}
               />
-              {text.length > 0 && (
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.mp3,.wav"
+                style={{ display: "none" }}
+                id="file-input"
+                disabled={uploading}
+              />
+              <label htmlFor="file-input" className="attach-file-btn">
+                <MdAttachFile size={24} color="#9b1c1c" />
+              </label>
+              {(text.length > 0 || mediaFile) && (
                 <span
                   className="send-icon-inside"
                   title="Send"
                   onClick={handleSend}
+                  style={{ opacity: uploading ? 0.5 : 1 }}
                 >
                   <IoMdSend size={20} color="#fff" />
                 </span>
@@ -732,6 +1305,13 @@ const Home = () => {
           </div>
         )}
       </div>
+      <MediaModal
+        isOpen={showMediaModal}
+        onClose={() => setShowMediaModal(false)}
+        mediaUrl={modalMedia?.url}
+        mediaType={modalMedia?.type}
+        fileName={modalMedia?.fileName}
+      />
     </div>
   );
 };
