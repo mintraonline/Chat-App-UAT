@@ -64,6 +64,7 @@ const Home = () => {
   const [showFileSizeError, setShowFileSizeError] = useState(false);
   const [showMediaModal, setShowMediaModal] = useState(false);
   const [modalMedia, setModalMedia] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
 
   const fileInputRef = useRef(null);
   const chatBodyRef = useRef(null);
@@ -322,174 +323,187 @@ const handleFileSelect = (e) => {
     }
   };
 
-  const handleSend = async () => {
-    if (!text.trim() && !mediaFile) return;
+const handleSend = async () => {
+  if (!text.trim() && !mediaFile) return;
 
-    const chatId =
-      currentUser.uid > selectedUser.uid
-        ? currentUser.uid + selectedUser.uid
-        : selectedUser.uid + currentUser.uid;
+  const chatId =
+    currentUser.uid > selectedUser.uid
+      ? currentUser.uid + selectedUser.uid
+      : selectedUser.uid + currentUser.uid;
 
-    setUploading(true);
-    setLoadingText(mediaType === "video" ? "Compressing..." : "Sending...");
+  setUploading(true);
+  setLoadingText(mediaType === "video" ? "Compressing..." : "Sending...");
 
-    let processedFile = mediaFile;
+  let processedFile = mediaFile;
 
-    if (mediaType === "image") {
-      try {
-        const options = {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 1280,
-          useWebWorker: true,
-        };
-        processedFile = await imageCompression(mediaFile, options);
-      } catch (err) {
-        console.error("Image compression failed, sending original.", err);
-        processedFile = mediaFile;
-      }
-    }
-
-    if (mediaType === "video") {
-      try {
-        if (!ffmpeg.loaded) {
-          setLoadingText("Loading compressor...");
-          await ffmpeg.load();
-        }
-
-        setLoadingText("Compressing video...");
-
-        const data = await mediaFile.arrayBuffer();
-        ffmpeg.writeFile("input.mp4", new Uint8Array(data));
-
-        await ffmpeg.exec([
-          "-i",
-          "input.mp4",
-          "-vf",
-          "scale='min(640,iw)':-2",
-          "-r",
-          "15",
-          "-c:v",
-          "libx264",
-          "-preset",
-          "fast",
-          "-crf",
-          "28",
-          "-maxrate",
-          "1M",
-          "-bufsize",
-          "2M",
-          "-c:a",
-          "aac",
-          "-b:a",
-          "64k",
-          "-y",
-          "output.mp4",
-        ]);
-
-        const output = await ffmpeg.readFile("output.mp4");
-
-        if (output.length < mediaFile.size) {
-          const blob = new Blob([output.buffer], { type: "video/mp4" });
-          processedFile = new File([blob], "compressed.mp4", {
-            type: "video/mp4",
-          });
-          console.log("Video compressed successfully");
-        } else {
-          console.log("Compression didn't reduce size, using original");
-          processedFile = mediaFile;
-        }
-      } catch (err) {
-        console.error("Video compression failed. Sending original video.", err);
-        processedFile = mediaFile;
-      }
-    }
-
-    setLoadingText("Uploading...");
-
-    let mediaUrl = null;
-    if (processedFile) {
-      try {
-        const formData = new FormData();
-        formData.append("file", processedFile);
-        formData.append("upload_preset", UPLOAD_PRESET);
-        formData.append("folder", FOLDER_NAME || "uat_chat");
-
-        const response = await axios.post(
-          `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
-          formData,
-          {
-            onUploadProgress: (progressEvent) => {
-              const percentCompleted = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
-              );
-              setLoadingText(`Uploading: ${percentCompleted}%`);
-            },
-          }
-        );
-
-        mediaUrl = response.data.secure_url;
-      } catch (err) {
-        console.error("Upload failed:", err);
-        setUploading(false);
-        setLoadingText("");
-        return;
-      }
-    }
-    const newMessage = {
-      id: Date.now(),
-      text,
-      senderId: currentUser.uid,
-      date: new Date(),
-      readBy: [currentUser.uid],
-      ...(mediaUrl && {
-        mediaUrl,
-        mediaType,
-        fileName: processedFile?.name,
-      }),
-    };
-
+  // --- Image compression ---
+  if (mediaType === "image" && mediaFile) {
     try {
-      const chatDocRef = doc(db, "chats", chatId);
+      const options = { maxSizeMB: 1, maxWidthOrHeight: 1280, useWebWorker: true };
+      processedFile = await imageCompression(mediaFile, options);
+    } catch (err) {
+      console.error("Image compression failed; sending original.", err);
+      processedFile = mediaFile;
+    }
+  }
 
-      await updateDoc(chatDocRef, {
-        messages: arrayUnion(newMessage),
-        lastMessage: {
-          text: text || 
-                (mediaType === "image" ? "📷 Image" :
-                mediaType === "video" ? "🎥 Video" :
-                mediaType === "audio" ? "🎵 Audio" : "📎 File"),
-          senderId: currentUser.uid,
-          date: new Date(),
-          mediaUrl: mediaUrl || null,
-          mediaType: mediaType || null,
+  // --- Video compression (ffmpeg) ---
+  if (mediaType === "video" && mediaFile) {
+    try {
+      if (!ffmpeg.loaded) {
+        setLoadingText("Loading compressor...");
+        await ffmpeg.load();
+      }
+      setLoadingText("Compressing video...");
+
+      const data = await mediaFile.arrayBuffer();
+      // write/read using FFmpeg API compatible methods
+      // depending on ffmpeg wrapper usage: using writeFile/readFile or FS as in examples
+      // if your ffmpeg instance exposes writeFile/readFile use those. Below assumes writeFile/exec/readFile.
+      ffmpeg.writeFile("input.mp4", new Uint8Array(data));
+
+      await ffmpeg.exec([
+        "-i","input.mp4",
+        "-vf","scale='min(640,iw)':-2",
+        "-r","15",
+        "-c:v","libx264",
+        "-preset","fast",
+        "-crf","28",
+        "-maxrate","1M",
+        "-bufsize","2M",
+        "-c:a","aac",
+        "-b:a","64k",
+        "-y","output.mp4",
+      ]);
+
+      const output = await ffmpeg.readFile("output.mp4");
+      if (output && output.length < mediaFile.size) {
+        const blob = new Blob([output.buffer], { type: "video/mp4" });
+        processedFile = new File([blob], "compressed.mp4", { type: "video/mp4" });
+        console.log("Video compressed successfully");
+      } else {
+        console.log("Compression didn't reduce size; using original");
+        processedFile = mediaFile;
+      }
+
+      // optional cleanup
+      try {
+        ffmpeg.unlink && ffmpeg.unlink("input.mp4");
+        ffmpeg.unlink && ffmpeg.unlink("output.mp4");
+      } catch {}
+    } catch (err) {
+      console.error("Video compression failed; sending original.", err);
+      processedFile = mediaFile;
+    }
+  }
+
+  setLoadingText("Uploading...");
+
+  let mediaUrl = null;
+  try {
+    if (processedFile) {
+      const ext = processedFile?.name?.split(".").pop()?.toLowerCase();
+      const isPdf = ext === "pdf";
+
+      // pick endpoint based on file type:
+      const endpoint = isPdf
+        ? `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`
+        : `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`;
+
+      const formData = new FormData();
+      formData.append("file", processedFile);
+      formData.append("upload_preset", UPLOAD_PRESET);
+      formData.append("folder", FOLDER_NAME || "uat_chat");
+
+      // For PDFs we use the raw endpoint (above). DO NOT append access_mode for unsigned uploads.
+      if (isPdf) {
+        // optional: you can append resource_type but calling raw/upload is enough:
+        // formData.append('resource_type', 'raw');
+      }
+
+      const response = await axios.post(endpoint, formData, {
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setLoadingText(`Uploading: ${percent}%`);
+          }
         },
       });
 
-      const userChatUpdates = {
-        [`${chatId}.lastMessage`]: {
-          text: text || (mediaType === "image" ? "📷 Image" : "🎥 Video"),
-          senderId: currentUser.uid,
-          date: new Date(),
-          mediaUrl: mediaUrl || null,
-          mediaType: mediaType || null,
-        },
-      };
-
-      await updateDoc(doc(db, "userChats", currentUser.uid), userChatUpdates);
-      await updateDoc(doc(db, "userChats", selectedUser.uid), userChatUpdates);
-
-      setText("");
-      setMediaFile(null);
-      setMediaPreview(null);
-      setMediaType(null);
-      setUploading(false);
-      setLoadingText("");
-    } catch (err) {
-      console.error("Message send failed:", err);
-      setUploading(false);
-      setLoadingText("");
+      console.log("cloudinary upload response", response.data);
+      mediaUrl = response.data.secure_url || response.data.url;
+      if (!mediaUrl) throw new Error("No media URL returned by Cloudinary");
     }
+  } catch (err) {
+    console.error("Upload failed:", err);
+    // Show Cloudinary error details if present
+    const cloudErr = err?.response?.data?.error?.message || err.message;
+    setUploadError(cloudErr);
+    setUploading(false);
+    setLoadingText("");
+    return;
+  }
+
+  // Build message and write to Firestore
+  const newMessage = {
+    id: Date.now(),
+    text,
+    senderId: currentUser.uid,
+    date: new Date(),
+    readBy: [currentUser.uid],
+    ...(mediaUrl && { mediaUrl, mediaType, fileName: processedFile?.name }),
   };
+
+  try {
+    const chatDocRef = doc(db, "chats", chatId);
+
+    await updateDoc(chatDocRef, {
+      messages: arrayUnion(newMessage),
+      lastMessage: {
+        text:
+          text ||
+          (mediaType === "image"
+            ? "📷 Image"
+            : mediaType === "video"
+            ? "🎥 Video"
+            : mediaType === "audio"
+            ? "🎵 Audio"
+            : "📎 File"),
+        senderId: currentUser.uid,
+        date: new Date(),
+        mediaUrl: mediaUrl || null,
+        mediaType: mediaType || null,
+      },
+    });
+
+    const userChatUpdates = {
+      [`${chatId}.lastMessage`]: {
+        text: text || (mediaType === "image" ? "📷 Image" : "🎥 Video"),
+        senderId: currentUser.uid,
+        date: new Date(),
+        mediaUrl: mediaUrl || null,
+        mediaType: mediaType || null,
+      },
+    };
+
+    await updateDoc(doc(db, "userChats", currentUser.uid), userChatUpdates);
+    await updateDoc(doc(db, "userChats", selectedUser.uid), userChatUpdates);
+
+    // Reset UI
+    setText("");
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType(null);
+    if (fileInputRef?.current) fileInputRef.current.value = "";
+    setUploading(false);
+    setLoadingText("");
+  } catch (err) {
+    console.error("Message send failed:", err);
+    setUploading(false);
+    setLoadingText("");
+  }
+};
+
 
   const handleDeleteMessage = async (messageId) => {
     const combinedId =
@@ -681,6 +695,17 @@ const renderMediaContent = (msg) => {
         </div>
       )}
 
+      {uploadError && (
+        <div className="overlay">
+          <div className="overlay-content">
+            <div className="overlay-icon">❌</div>
+            <h2>Upload Failed</h2>
+            <p>{uploadError}</p>
+            <button onClick={() => setUploadError(null)}>OK</button>
+          </div>
+        </div>
+      )}
+      
       {!isMobile() && (
         <div className="sidebar">
           <div className="sidebar-header">
