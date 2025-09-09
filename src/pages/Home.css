@@ -528,7 +528,6 @@ body {
   flex-direction: column;
   height: 100%;
 }
-/* Sent (right-aligned) */
 .chat-message.sent {
   margin-left: auto;
   background-color: #9b1c1c;
@@ -537,7 +536,6 @@ body {
   align-items: flex-end;
 }
 
-/* Received (left-aligned) */
 .chat-message.received {
   margin-right: auto;
   background-color: #e6e6e6;
@@ -588,21 +586,60 @@ margin-left: 15px;
   }
 }
 
-/* Timestamp */
 .timestamp {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.7); /* for sent */
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .chat-message.received .timestamp {
   color: #999;
 }
-
-/* Message text */
-.message-text {
-  font-size: 15px;
-  color: inherit;
+.audio-message {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  width: auto;
+  overflow: visible;
 }
+
+.audio-inner {
+  display: flex;
+  align-items: center;
+  width: 320px;
+  max-width: 100%;
+  padding: 6px 10px;
+  gap: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  box-sizing: border-box;
+  overflow: hidden;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.audio-inner audio,
+.preview-audio,
+.media-preview audio {
+  width: 100%;
+  max-width: 100%;
+  height: 36px;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.media-preview .preview-audio,
+.preview-audio {
+  width: 280px;
+  max-width: calc(100% - 24px);
+  height: 36px;
+}
+
 .logged-in-user {
   display: flex;
   align-items: center;
@@ -994,7 +1031,6 @@ margin-left: 15px;
 }
 
 
-/* Adjust input padding to make room for buttons */
 .chat-input-field input {
   padding: 12px 48px 12px 48px !important;
 }
@@ -1157,4 +1193,37 @@ margin-left: 15px;
     font-size: 13px;
     padding: 10px;
   }
+    .audio-inner {
+    width: 240px !important;
+    padding: 6px 8px !important;
+  }
+
+  .media-preview .preview-audio,
+  .preview-audio {
+    width: 220px !important;
+    max-width: calc(100% - 20px) !important;
+  }
+
+  .chat-message,
+  .chat-message .audio-inner {
+    max-width: 100% !important;
+  }
+}
+@media (hover: none) and (pointer: coarse) {
+  .audio-inner audio,
+  .preview-audio {
+    height: 44px;
+  }
+}
+
+.media-preview,
+.media-preview .audio-inner,
+.audio-message,
+.chat-input-wrapper {
+  z-index: 20;
+}
+
+.audio-inner audio::-webkit-media-controls-panel {
+  width: 100%;
+  box-sizing: border-box;
 }

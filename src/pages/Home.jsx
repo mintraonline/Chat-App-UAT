@@ -15,7 +15,7 @@ import { db, auth } from "../firebase";
 import axios from "axios";
 import "./Home.css";
 import { signOut } from "firebase/auth";
-import { FaArrowLeft, FaUserCircle } from "react-icons/fa";
+import { FaArrowLeft, FaMusic, FaUserCircle } from "react-icons/fa";
 import {
   MdDeleteOutline,
   MdOutlinePersonOutline,
@@ -34,6 +34,7 @@ import {
   FaFileImage,
   FaFileVideo,
 } from "react-icons/fa";
+import MediaModal from "../components/MediaModal";
 
 const isMobile = () => window.innerWidth <= 768;
 const ffmpeg = new FFmpeg();
@@ -59,9 +60,11 @@ const Home = () => {
   const [mediaPreview, setMediaPreview] = useState(null);
   const [mediaType, setMediaType] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
   const [showFileSizeError, setShowFileSizeError] = useState(false);
+  const [showMediaModal, setShowMediaModal] = useState(false);
+  const [modalMedia, setModalMedia] = useState(null);
+
   const fileInputRef = useRef(null);
   const chatBodyRef = useRef(null);
 
@@ -271,40 +274,44 @@ const Home = () => {
     }
   };
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+const handleFileSelect = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    if (file.size > 50 * 1024 * 1024) {
-      setShowFileSizeError(true);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      return;
+  if (file.size > 100 * 1024 * 1024) {
+    setShowFileSizeError(true);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
+    return;
+  }
 
-    setMediaFile(file);
+  setMediaFile(file);
 
-    if (file.type.startsWith("image/")) {
-      setMediaType("image");
+  if (file.type.startsWith("image/")) {
+    setMediaType("image");
+    setMediaPreview(URL.createObjectURL(file));
+  } else if (file.type.startsWith("video/")) {
+    setMediaType("video");
+    setMediaPreview(URL.createObjectURL(file));
+  } else if (file.type.startsWith("audio/")) {
+    setMediaType("audio");
+    setMediaPreview(URL.createObjectURL(file));
+  } else {
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (ext === "pdf") {
+      setMediaType("pdf");
       setMediaPreview(URL.createObjectURL(file));
-    } else if (file.type.startsWith("video/")) {
-      setMediaType("video");
+    } else if (["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) {
+      setMediaType("office");
       setMediaPreview(URL.createObjectURL(file));
     } else {
-      const ext = file.name.split(".").pop().toLowerCase();
-      if (ext === "pdf") {
-        setMediaType("pdf");
-        setMediaPreview(URL.createObjectURL(file));
-      } else if (["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext)) {
-        setMediaType("office");
-        setMediaPreview(URL.createObjectURL(file));
-      } else {
-        setMediaType("file");
-        setMediaPreview(null);
-      }
+      setMediaType("file");
+      setMediaPreview(null);
     }
-  };
+  }
+};
+
 
   const removeMedia = () => {
     setMediaFile(null);
@@ -447,7 +454,10 @@ const Home = () => {
       await updateDoc(chatDocRef, {
         messages: arrayUnion(newMessage),
         lastMessage: {
-          text: text || (mediaType === "image" ? "📷 Image" : "🎥 Video"),
+          text: text || 
+                (mediaType === "image" ? "📷 Image" :
+                mediaType === "video" ? "🎥 Video" :
+                mediaType === "audio" ? "🎵 Audio" : "📎 File"),
           senderId: currentUser.uid,
           date: new Date(),
           mediaUrl: mediaUrl || null,
@@ -578,90 +588,70 @@ const Home = () => {
       case "mov":
       case "avi":
         return <FaFileVideo size={24} color="#8e24aa" />;
+      case "mp3":
+      case "wav":
+      case "aac":
+      case "ogg":
+        return <FaMusic size={24} color="#ff9800" />; 
       default:
         return <FaFileAlt size={24} color="#757575" />;
     }
   };
 
-  const renderMediaContent = (msg) => {
-    if (!msg.mediaUrl) return null;
+const renderMediaContent = (msg) => {
+  if (!msg.mediaUrl) return null;
 
-    const ext = msg.fileName?.split(".").pop().toLowerCase();
-
-    if (msg.mediaType === "image") {
-      const handleDownload = async () => {
-        try {
-          const response = await fetch(msg.mediaUrl, { mode: "cors" });
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = msg.fileName || "image.jpg";
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          window.URL.revokeObjectURL(url);
-        } catch (err) {
-          console.error("Download failed:", err);
-        }
-      };
-
-      return (
-        <img
-          src={msg.mediaUrl}
-          alt="Shared media"
-          className="chat-media"
-          style={{ cursor: "pointer" }}
-          onClick={handleDownload}
-        />
-      );
-    }
-
-    if (msg.mediaType === "video") {
-      const handleDownload = async () => {
-        try {
-          const response = await fetch(msg.mediaUrl, { mode: "cors" });
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = msg.fileName || "video.mp4"; // fallback name
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          window.URL.revokeObjectURL(url);
-        } catch (err) {
-          console.error("Video download failed:", err);
-        }
-      };
-
-      return (
-        <video
-          src={msg.mediaUrl}
-          controls
-          className="chat-media"
-          style={{ cursor: "pointer" }}
-          onClick={handleDownload}
-        />
-      );
-    }
-
-    if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext)) {
-      return (
-        <div className="file-message">
-          <div className="file-icon">{getFileIcon(msg.fileName)}</div>
-          <a href={msg.mediaUrl} className="file-details">
-            <span target="_blank" className="file-name" title={msg.fileName}>
-              {msg.fileName?.length > 20
-                ? msg.fileName.substring(0, 20) + "..."
-                : msg.fileName}
-            </span>
-          </a>
-        </div>
-      );
-    }
-    return null;
+  const handleOpenModal = () => {
+    setModalMedia({
+      url: msg.mediaUrl,
+      type: msg.mediaType,
+      fileName: msg.fileName,
+    });
+    setShowMediaModal(true);
   };
+
+  if (msg.mediaType === "image") {
+    return (
+      <img
+        src={msg.mediaUrl}
+        alt="Shared media"
+        className="chat-media"
+        style={{ cursor: "pointer" }}
+        onClick={handleOpenModal}
+      />
+    );
+  }
+
+  if (msg.mediaType === "video") {
+    return (
+      <video
+        src={msg.mediaUrl}
+        className="chat-media"
+        controls
+        style={{ cursor: "pointer" }}
+      />
+    );
+  }
+
+  if (msg.mediaType === "audio") {
+    return (
+      <div className="audio-message" onClick={handleOpenModal}>
+        <div className="audio-inner">
+          <audio controls>
+            <source src={msg.mediaUrl} type="audio/mpeg" />
+          </audio>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="file-message" onClick={handleOpenModal}>
+      <div className="file-icon">{getFileIcon(msg.fileName)}</div>
+      <span className="file-name">{msg.fileName}</span>
+    </div>
+  );
+};
 
   return (
     <div className="chat-app">
@@ -683,7 +673,7 @@ const Home = () => {
             <div className="overlay-icon">⚠️</div>
             <h2>File Too Large</h2>
             <p>
-              The selected file exceeds the 50 MB limit. Please choose a smaller
+              The selected file exceeds the 100 MB limit. Please choose a smaller
               file.
             </p>
             <button onClick={() => setShowFileSizeError(false)}>OK</button>
@@ -1230,6 +1220,9 @@ const Home = () => {
                     className="preview-video"
                   />
                 )}
+                {mediaType === "audio" && (
+                  <audio src={mediaPreview} controls className="preview-audio" />
+                )}
                 {["pdf", "office", "file"].includes(mediaType) && (
                   <div className="preview-file">
                     {getFileIcon(mediaFile?.name)}
@@ -1265,7 +1258,7 @@ const Home = () => {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
-                accept="image/*,video/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx"
+                accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.mp3,.wav"
                 style={{ display: "none" }}
                 id="file-input"
                 disabled={uploading}
@@ -1287,6 +1280,13 @@ const Home = () => {
           </div>
         )}
       </div>
+      <MediaModal
+        isOpen={showMediaModal}
+        onClose={() => setShowMediaModal(false)}
+        mediaUrl={modalMedia?.url}
+        mediaType={modalMedia?.type}
+        fileName={modalMedia?.fileName}
+      />
     </div>
   );
 };
