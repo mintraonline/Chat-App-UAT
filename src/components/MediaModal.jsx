@@ -22,6 +22,9 @@ const MediaModal = ({ isOpen, onClose, mediaUrl, mediaType, fileName }) => {
   const [error, setError] = useState(false);
   const blobUrlRef = useRef(null);
 
+  // Detect mobile (basic check)
+  const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+
   useEffect(() => {
     return () => {
       if (blobUrlRef.current) {
@@ -33,6 +36,12 @@ const MediaModal = ({ isOpen, onClose, mediaUrl, mediaType, fileName }) => {
 
   useEffect(() => {
     if (!mediaUrl) return;
+
+    // 🟢 If mobile + pdf → directly download, don’t preview
+    if (isMobile && mediaType === "pdf") {
+      handleDownload();
+      return;
+    }
 
     setLoading(true);
     setError(false);
@@ -50,37 +59,9 @@ const MediaModal = ({ isOpen, onClose, mediaUrl, mediaType, fileName }) => {
               return;
             }
 
-            const contentType = res.headers.get("content-type") || "";
-            const contentLengthHeader = res.headers.get("content-length");
-            const contentLength = contentLengthHeader
-              ? parseInt(contentLengthHeader, 10)
-              : null;
-
-            if (!contentType.includes("pdf")) {
-              console.warn(
-                "Preview fetch returned non-pdf content-type:",
-                contentType
-              );
-            }
-
             const blob = await res.blob();
             if (!blob || blob.size === 0) {
               console.error("Preview blob empty");
-              setError(true);
-              setLoading(false);
-              return;
-            }
-            if (
-              contentType &&
-              !contentType.includes("pdf") &&
-              blob.type !== "application/pdf"
-            ) {
-              console.warn(
-                "Blob type mismatch:",
-                blob.type,
-                "content-type header:",
-                contentType
-              );
               setError(true);
               setLoading(false);
               return;
@@ -110,42 +91,36 @@ const MediaModal = ({ isOpen, onClose, mediaUrl, mediaType, fileName }) => {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaUrl, mediaType]);
 
   const handleDownload = async () => {
     try {
-      const res = await fetch(mediaUrl, { mode: 'cors' });
+      const res = await fetch(mediaUrl, { mode: "cors" });
       if (!res.ok) {
-        console.error('download error', res.status);
-        window.open(mediaUrl, '_blank');
+        console.error("download error", res.status);
+        window.open(mediaUrl, "_blank");
         return;
       }
 
-      const contentType = res.headers.get('content-type') || '';
       const blob = await res.blob();
       if (!blob || blob.size === 0) {
-        console.error('empty blob');
-        window.open(mediaUrl, '_blank');
-        return;
-      }
-
-      if (mediaType === 'pdf' && !contentType.includes('pdf') && blob.type !== 'application/pdf') {
-        console.warn('downloaded content not pdf', contentType, blob.type);
-        window.open(mediaUrl, '_blank');
+        console.error("empty blob");
+        window.open(mediaUrl, "_blank");
         return;
       }
 
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = fileName || 'download';
+      a.download = fileName || "download";
       document.body.appendChild(a);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 15000);
     } catch (err) {
-      console.error('download failed', err);
-      window.open(mediaUrl, '_blank');
+      console.error("download failed", err);
+      window.open(mediaUrl, "_blank");
     }
   };
 
@@ -189,7 +164,7 @@ const MediaModal = ({ isOpen, onClose, mediaUrl, mediaType, fileName }) => {
             color: "white",
             fontSize: 22,
             cursor: "pointer",
-            zIndex: 20
+            zIndex: 20,
           }}
         >
           <IoMdClose />
@@ -197,13 +172,15 @@ const MediaModal = ({ isOpen, onClose, mediaUrl, mediaType, fileName }) => {
 
         {/* Loader - CENTERED */}
         {loading && !error && (
-          <div style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            zIndex: 10
-          }}>
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 10,
+            }}
+          >
             <SmallSpinner />
           </div>
         )}
@@ -215,7 +192,7 @@ const MediaModal = ({ isOpen, onClose, mediaUrl, mediaType, fileName }) => {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            position: "relative"
+            position: "relative",
           }}
         >
           {!error && mediaType === "image" && previewUrl && (

@@ -615,14 +615,29 @@ const handleSend = async () => {
 const renderMediaContent = (msg) => {
   if (!msg.mediaUrl) return null;
 
-  const handleOpenModal = () => {
-    setModalMedia({
-      url: msg.mediaUrl,
-      type: msg.mediaType,
-      fileName: msg.fileName,
-    });
-    setShowMediaModal(true);
-  };
+const handleOpenModal = () => {
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+
+  if (msg.mediaType === "pdf" && isMobile) {
+    // Mobile → force download
+    const a = document.createElement("a");
+    a.href = msg.mediaUrl;
+    a.download = msg.fileName || "download.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+
+  // Desktop (pdf + others) → keep same modal logic
+  setModalMedia({
+    url: msg.mediaUrl,
+    type: msg.mediaType,
+    fileName: msg.fileName,
+  });
+  setShowMediaModal(true);
+};
+
 
   if (msg.mediaType === "image") {
     return (
