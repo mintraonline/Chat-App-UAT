@@ -629,7 +629,7 @@ const handleOpenModal = () => {
     return;
   }
 
-  // Desktop (pdf + others) → keep same modal logic
+  // Desktop → same as before (modal preview)
   setModalMedia({
     url: msg.mediaUrl,
     type: msg.mediaType,
