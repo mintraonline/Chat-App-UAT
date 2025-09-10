@@ -615,21 +615,35 @@ const handleSend = async () => {
 const renderMediaContent = (msg) => {
   if (!msg.mediaUrl) return null;
 
-const handleOpenModal = () => {
+const handleOpenModal = async () => {
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
   if (msg.mediaType === "pdf" && isMobile) {
-    // Mobile → force download
-    const a = document.createElement("a");
-    a.href = msg.mediaUrl;
-    a.download = msg.fileName || "download.pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    try {
+      const res = await fetch(msg.mediaUrl, { mode: "cors" });
+      if (!res.ok) throw new Error("Failed to fetch PDF");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = msg.fileName || "download.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      // cleanup
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      console.error("PDF download failed", err);
+      // fallback → open in same tab
+      window.open(msg.mediaUrl, "_blank");
+    }
     return;
   }
 
-  // Desktop → same as before (modal preview)
+  // Desktop → normal preview
   setModalMedia({
     url: msg.mediaUrl,
     type: msg.mediaType,
@@ -637,6 +651,7 @@ const handleOpenModal = () => {
   });
   setShowMediaModal(true);
 };
+
 
 
   if (msg.mediaType === "image") {
