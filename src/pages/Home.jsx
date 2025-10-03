@@ -116,18 +116,21 @@ const Home = () => {
 
     loadFFmpeg();
   }, []);
+useEffect(() => {
+  const filtered = allUsers.filter((user) => {
+    const name = user?.displayName?.toLowerCase() || "";
+    const term = searchTerm?.toLowerCase() || "";
+    return name.includes(term);
+  });
 
-  useEffect(() => {
-    const filtered = allUsers.filter((user) =>
-      user.displayName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    const sorted = filtered.sort((a, b) => {
-      const aLast = lastMessageMap[a.uid] || 0;
-      const bLast = lastMessageMap[b.uid] || 0;
-      return bLast - aLast;
-    });
-    setUsers(sorted);
-  }, [searchTerm, allUsers, lastMessageMap]);
+  const sorted = filtered.sort((a, b) => {
+    const aLast = lastMessageMap[a.uid] || 0;
+    const bLast = lastMessageMap[b.uid] || 0;
+    return bLast - aLast;
+  });
+
+  setUsers(sorted);
+}, [searchTerm, allUsers, lastMessageMap]);
 
   useEffect(() => {
     const unsubscribes = [];
