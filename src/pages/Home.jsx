@@ -119,7 +119,7 @@ const Home = () => {
 
   useEffect(() => {
     const filtered = allUsers.filter((user) =>
-      user.displayName.toLowerCase().includes(searchTerm.toLowerCase())
+      user?.displayName?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const sorted = filtered.sort((a, b) => {
       const aLast = lastMessageMap[a.uid] || 0;
@@ -192,78 +192,82 @@ const Home = () => {
     return () => unsub();
   }, [selectedUser?.uid, currentUser.uid]);
 
-  const handleSelectUser = async (user) => {
-    setSelectedUser(user);
-    setText("");
-    setMediaFile(null);
-    setMediaPreview(null);
-    setMediaType(null);
+const handleSelectUser = async (user) => {
+  setSelectedUser(user);
+  setText("");
+  setMediaFile(null);
+  setMediaPreview(null);
+  setMediaType(null);
 
-    localStorage.setItem("selectedUser", JSON.stringify(user));
-    if (isMobile()) setShowSidebar(false);
+  localStorage.setItem("selectedUser", JSON.stringify(user));
+  if (isMobile()) setShowSidebar(false);
 
-    const combinedId =
-      currentUser.uid > user.uid
-        ? currentUser.uid + user.uid
-        : user.uid + currentUser.uid;
+  const combinedId =
+    currentUser.uid > user.uid
+      ? currentUser.uid + user.uid
+      : user.uid + currentUser.uid;
 
-    const chatRef = doc(db, "chats", combinedId);
-    try {
-      const chatSnap = await getDoc(chatRef);
-      if (!chatSnap.exists()) {
-        await setDoc(chatRef, {
-          participants: [currentUser.uid, user.uid],
-          messages: [],
-        });
-      } else {
-        const chatData = chatSnap.data();
-        const updatedMessages = chatData.messages.map((msg) => {
-          if (
-            msg.senderId !== currentUser.uid &&
-            (!msg.readBy || !msg.readBy.includes(currentUser.uid))
-          ) {
-            return {
-              ...msg,
-              readBy: [...(msg.readBy || []), currentUser.uid],
-            };
-          }
-          return msg;
-        });
+  const chatRef = doc(db, "chats", combinedId);
 
-        await updateDoc(chatRef, {
-          messages: updatedMessages,
-        });
+  try {
+    const chatSnap = await getDoc(chatRef);
+    if (!chatSnap.exists()) {
+      await setDoc(chatRef, {
+        participants: [currentUser.uid, user.uid],
+        messages: [],
+        createdAt: serverTimestamp(),
+      });
+    } else {
+      const chatData = chatSnap.data();
+      const updatedMessages = chatData.messages.map((msg) => {
+        if (
+          msg.senderId !== currentUser.uid &&
+          (!msg.readBy || !msg.readBy.includes(currentUser.uid))
+        ) {
+          return {
+            ...msg,
+            readBy: [...(msg.readBy || []), currentUser.uid],
+          };
+        }
+        return msg;
+      });
 
-        setUnreadMap((prev) => ({ ...prev, [user.uid]: 0 }));
-      }
+      await updateDoc(chatRef, {
+        messages: updatedMessages,
+      });
 
-      await setDoc(
-        doc(db, "userChats", currentUser.uid),
-        {
-          [combinedId + ".userInfo"]: {
-            uid: user.uid,
-            displayName: user.displayName,
-          },
-          [combinedId + ".date"]: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      await setDoc(
-        doc(db, "userChats", user.uid),
-        {
-          [combinedId + ".userInfo"]: {
-            uid: currentUser.uid,
-            displayName: currentUser.displayName,
-          },
-          [combinedId + ".date"]: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } catch (err) {
-      console.error("Failed to create/select chat:", err);
+      setUnreadMap((prev) => ({ ...prev, [user.uid]: 0 }));
     }
-  };
+
+    // update userChats...
+    await setDoc(
+      doc(db, "userChats", currentUser.uid),
+      {
+        [combinedId + ".userInfo"]: {
+          uid: user.uid,
+          displayName: user.displayName,
+        },
+        [combinedId + ".date"]: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    await setDoc(
+      doc(db, "userChats", user.uid),
+      {
+        [combinedId + ".userInfo"]: {
+          uid: currentUser.uid,
+          displayName: currentUser.displayName,
+        },
+        [combinedId + ".date"]: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error("Failed to create/select chat:", err);
+  }
+};
+
 
   const ensureParticipantsExist = async (chatRef, participants) => {
     const chatSnap = await getDoc(chatRef);
@@ -457,24 +461,16 @@ const handleSend = async () => {
   try {
     const chatDocRef = doc(db, "chats", chatId);
 
-    await updateDoc(chatDocRef, {
-      messages: arrayUnion(newMessage),
-      lastMessage: {
-        text:
-          text ||
-          (mediaType === "image"
-            ? "📷 Image"
-            : mediaType === "video"
-            ? "🎥 Video"
-            : mediaType === "audio"
-            ? "🎵 Audio"
-            : "📎 File"),
-        senderId: currentUser.uid,
-        date: new Date(),
-        mediaUrl: mediaUrl || null,
-        mediaType: mediaType || null,
-      },
-    });
+await updateDoc(chatDocRef, {
+  messages: arrayUnion(newMessage),
+  lastMessage: {
+    text: newMessage.text || "📎 File",
+    senderId: currentUser.uid,
+    date: new Date(),
+    mediaUrl: mediaUrl || null,
+    mediaType: mediaType || null,
+  },
+});
 
     const userChatUpdates = {
       [`${chatId}.lastMessage`]: {

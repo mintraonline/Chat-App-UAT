@@ -1,43 +1,46 @@
 import { createContext, useEffect, useState } from "react";
-import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../src/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../firebase";  // adjust path to your firebase.js
 
 export const AuthContext = createContext();
 
 export const AuthContextProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkUrlCredentials = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const email = urlParams.get("email");
-      const password = urlParams.get("password");
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUser(user);
 
-      if (email && password) {
-        try {
-          await signInWithEmailAndPassword(auth, email, password);
+        const userRef = doc(db, "users", user.uid);
 
-          const cleanUrl = window.location.origin + window.location.pathname;
-          window.history.replaceState({}, document.title, cleanUrl);
-        } catch (error) {
-          console.error("Auto login failed:", error);
-        }
+        // Mark online
+        await updateDoc(userRef, {
+          isOnline: true,
+          lastSeen: serverTimestamp(),
+        });
+
+        // Mark offline when browser closes or refreshes
+        const handleUnload = async () => {
+          await updateDoc(userRef, {
+            isOnline: false,
+            lastSeen: serverTimestamp(),
+          });
+        };
+
+        window.addEventListener("beforeunload", handleUnload);
+
+        return () => {
+          window.removeEventListener("beforeunload", handleUnload);
+        };
+      } else {
+        setCurrentUser(null);
       }
-    };
-
-    checkUrlCredentials();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setLoading(false);
     });
+
     return () => unsub();
   }, []);
-
-  if (loading) return <p>Authenticating...</p>;
 
   return (
     <AuthContext.Provider value={{ currentUser }}>
