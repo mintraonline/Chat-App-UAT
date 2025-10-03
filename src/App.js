@@ -13,7 +13,7 @@ function App() {
 
   return (
     <AuthContextProvider>
-      <BrowserRouter basename="/Chat-App-UAT">
+      <BrowserRouter basename="/Chat-App">
         <Routes>
           <Route
             path="/"
