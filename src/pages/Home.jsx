@@ -899,12 +899,12 @@ const handleOpenModal = async () => {
                     marginTop: "2px",
                   }}
                 >
-                  {currentUser?.displayName || currentUser?.email}
+                  {currentUser?.displayName || ''}
                   <span
                     style={{
                       alignItems: "center",
                       gap: "6px",
-                      marginLeft: "10px",
+                      marginLeft: currentUser?.displayName.length > 0 ? "10px" : '0px',
                       marginTop: "4px",
                     }}
                   >

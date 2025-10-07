@@ -17,33 +17,39 @@ const Register = () => {
 
   const handleRegister = async () => {
     try {
-      let isValid = !firstName || !lastName || !username || !email || !password
-      if(isValid){
-        alert('All Fields are mandatory')
-        return
+      if (!username || !email || !password) {
+        alert("Username, Email, and Password are mandatory.");
+        return;
       }
-      
+
       if (!isValidUsername(username)) {
         alert("Username must be exactly 7 alphanumeric characters.");
         return;
       }
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      const displayName = `${firstName} ${lastName}`;
 
-      await updateProfile(res.user, {
-        displayName: displayName,
-      });
+      const res = await createUserWithEmailAndPassword(auth, email, password);
+
+      const displayName =
+        firstName || lastName
+          ? `${firstName || ""} ${lastName || ""}`.trim()
+          : '';
+
+      await updateProfile(res.user, { displayName });
+
       await setDoc(doc(db, "users", res.user.uid), {
         uid: res.user.uid,
-        firstName,
-        lastName,
+        firstName: firstName || "",
+        lastName: lastName || "",
         username,
         displayName,
         email: res.user.email,
+        createdAt: new Date(),
+        isOnline: true,
       });
+
       navigate("/");
     } catch (err) {
-      console.error(err);
+      console.error("Registration failed:", err);
       alert("Registration failed. Try again.");
     }
   };
