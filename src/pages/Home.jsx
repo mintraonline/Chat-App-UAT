@@ -887,12 +887,11 @@ const handleOpenModal = async () => {
                   }}
                 >
                   {currentUser?.username || currentUser?.email}
-                </div>
-                <div
+                <span
                   style={{
-                    display: "flex",
                     alignItems: "center",
                     gap: "6px",
+                    marginLeft:'10px',
                     marginTop: "4px",
                   }}
                 >
@@ -904,6 +903,7 @@ const handleOpenModal = async () => {
                       backgroundColor: "#4caf50",
                       display: "inline-block",
                       flexShrink: 0,
+                      marginRight:'3px'
                     }}
                   ></span>
                   <span
@@ -915,6 +915,7 @@ const handleOpenModal = async () => {
                   >
                     Online
                   </span>
+                </span>
                 </div>
               </div>
             </div>
