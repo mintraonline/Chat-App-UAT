@@ -9,17 +9,36 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+
   const navigate = useNavigate();
+  const isValidUsername = (name) => /^[a-zA-Z0-9]{7}$/.test(name);
 
   const handleRegister = async () => {
     try {
+      let isValid = !firstName || !lastName || !username || !email || !password
+      if(isValid){
+        alert('All Fields are mandatory')
+        return
+      }
+      
+      if (!isValidUsername(username)) {
+        alert("Username must be exactly 7 alphanumeric characters.");
+        return;
+      }
       const res = await createUserWithEmailAndPassword(auth, email, password);
+      const displayName = `${firstName} ${lastName}`;
+
       await updateProfile(res.user, {
-        displayName: username,
+        displayName: displayName,
       });
       await setDoc(doc(db, "users", res.user.uid), {
         uid: res.user.uid,
-        displayName: username,
+        firstName,
+        lastName,
+        username,
+        displayName,
         email: res.user.email,
       });
       navigate("/");
@@ -45,6 +64,22 @@ const Register = () => {
           onChange={(e) => setUsername(e.target.value)}
           className="register-input"
         />
+        <input
+          type="text"
+          placeholder="First Name"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          className="register-input"
+        />
+
+        <input
+          type="text"
+          placeholder="Last Name"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          className="register-input"
+        />
+        
         <input
           type="email"
           placeholder="Email"

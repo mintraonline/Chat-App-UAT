@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import "./Login.css";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 const Login = () => {
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const navigate = useNavigate();
 
   const ADMIN_PIN = process.env.REACT_APP_ADMIN_PIN
@@ -16,11 +17,29 @@ const Login = () => {
 
   const handleLogin = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      let emailToUse = identifier;
+
+      if (!identifier.includes("@")) {
+        const q = query(
+          collection(db, "users"),
+          where("username", "==", identifier)
+        );
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          alert("❌ Username not found.");
+          return;
+        }
+
+        const userData = querySnapshot.docs[0].data();
+        emailToUse = userData.email;
+      }
+
+      await signInWithEmailAndPassword(auth, emailToUse, password);
       navigate("/");
     } catch (err) {
-      console.log(err);
-      alert("Invalid credentials");
+      console.error(err);
+      alert("Invalid credentials. Please check your details.");
     }
   };
 
@@ -48,10 +67,10 @@ const Login = () => {
         <div className="login-box">
           <h2 className="login-title">Login</h2>
           <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="Username or Email"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
             className="login-input"
           />
           <input
