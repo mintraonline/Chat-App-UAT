@@ -887,7 +887,7 @@ const handleOpenModal = async () => {
                     textOverflow: "ellipsis",
                   }}
                 >
-                  {currentUser?.displayName}
+                  {currentUser?.username}
                 </div>
                 <div
                   style={{
@@ -899,7 +899,7 @@ const handleOpenModal = async () => {
                     marginTop: "2px",
                   }}
                 >
-                  {currentUser?.username || currentUser?.email}
+                  {currentUser?.displayName || currentUser?.email}
                   <span
                     style={{
                       alignItems: "center",
@@ -914,7 +914,7 @@ const handleOpenModal = async () => {
                         height: 10,
                         borderRadius: "50%",
                         backgroundColor: "#4caf50",
-                        // display: "inline-block",
+                        display: "inline-block",
                         flexShrink: 0,
                         marginRight: "3px",
                       }}
