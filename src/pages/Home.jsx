@@ -930,6 +930,7 @@ const handleOpenModal = async () => {
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
+                marginRight:'40px'
               }}
             >
               <FiLogOut size={22} color="#fff" />
@@ -1179,6 +1180,7 @@ const handleOpenModal = async () => {
                 style={{
                   display: "flex",
                   alignItems: "center",
+                  marginRight:'25px'
                 }}
               >
                 <button
