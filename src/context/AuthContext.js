@@ -1,6 +1,7 @@
 import { createContext, useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../../src/firebase";
+import { auth, db } from "../../src/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 export const AuthContext = createContext();
 
@@ -9,15 +10,35 @@ export const AuthContextProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      try {
+        if (user) {
+          const userDocRef = doc(db, "users", user.uid);
+          const userDoc = await getDoc(userDocRef);
+
+          if (userDoc.exists()) {
+            setCurrentUser({
+              ...user,
+              ...userDoc.data(), // includes username, firstName, etc.
+            });
+          } else {
+            setCurrentUser(user);
+          }
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (error) {
+        console.error("AuthContext error:", error);
+      } finally {
+        // ✅ Always stop loading no matter what
+        setLoading(false);
+      }
     });
 
-    return () => unsub();
+    return () => unsubscribe();
   }, []);
 
-  if (loading)
+  if (loading) {
     return (
       <div
         style={{
@@ -44,7 +65,6 @@ export const AuthContextProvider = ({ children }) => {
         />
         <p style={{ fontSize: "16px" }}>Authenticating...</p>
 
-        {/* Spinner animation keyframes (injected dynamically) */}
         <style>
           {`
             @keyframes spin {
@@ -55,6 +75,7 @@ export const AuthContextProvider = ({ children }) => {
         </style>
       </div>
     );
+  }
 
   return (
     <AuthContext.Provider value={{ currentUser }}>

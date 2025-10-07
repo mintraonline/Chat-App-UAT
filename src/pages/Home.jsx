@@ -886,7 +886,7 @@ const handleOpenModal = async () => {
                     marginTop: "2px",
                   }}
                 >
-                  {currentUser?.email}
+                  {currentUser?.username || currentUser?.email}
                 </div>
                 <div
                   style={{
