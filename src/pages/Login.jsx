@@ -9,37 +9,40 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
-  const [identifier, setIdentifier] = useState("");
+  const [username, setUsername] = useState("");
   const navigate = useNavigate();
 
-  const ADMIN_PIN = process.env.REACT_APP_ADMIN_PIN
-
+  const ADMIN_PIN = process.env.REACT_APP_ADMIN_PIN;
 
   const handleLogin = async () => {
     try {
-      let emailToUse = identifier;
-
-      if (!identifier.includes("@")) {
-        const q = query(
-          collection(db, "users"),
-          where("username", "==", identifier)
-        );
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-          alert("❌ Username not found.");
-          return;
-        }
-
-        const userData = querySnapshot.docs[0].data();
-        emailToUse = userData.email;
+      if (!username.trim()) {
+        alert("❌ Please enter a username.");
+        return;
       }
 
-      await signInWithEmailAndPassword(auth, emailToUse, password);
+      // Query user by username
+      const q = query(
+        collection(db, "users"),
+        where("username", "==", username.trim())
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        alert("❌ Username not found.");
+        return;
+      }
+
+      // Get user data and email
+      const userData = querySnapshot.docs[0].data();
+      const userEmail = userData.email;
+
+      // Sign in with the email associated with the username
+      await signInWithEmailAndPassword(auth, userEmail, password);
       navigate("/");
     } catch (err) {
       console.error(err);
-      alert("Invalid credentials. Please check your details.");
+      alert("Invalid credentials. Please check your username and password.");
     }
   };
 
@@ -68,9 +71,9 @@ const Login = () => {
           <h2 className="login-title">Login</h2>
           <input
             type="text"
-            placeholder="Username or Email"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="login-input"
           />
           <input
@@ -84,17 +87,17 @@ const Login = () => {
           <button onClick={handleLogin} className="login-button">
             Login
           </button>
-
+{/* 
           <p className="login-footer">
             New user?{" "}
             <span className="register-link" onClick={handleAskAdminPin}>
               Register here
             </span>
-          </p>
+          </p> */}
         </div>
 
         {/* Admin PIN Modal */}
-        {showPinPrompt && (
+        {/* {showPinPrompt && (
           <div className="pin-modal">
             <div className="pin-box">
               <h3>Admin Access</h3>
@@ -112,7 +115,7 @@ const Login = () => {
               </div>
             </div>
           </div>
-        )}
+        )} */}
       </div>
     </div>
   );

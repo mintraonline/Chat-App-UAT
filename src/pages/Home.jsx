@@ -120,7 +120,7 @@ const Home = () => {
 
   useEffect(() => {
     const filtered = allUsers.filter((user) =>
-      user.displayName.toLowerCase().includes(searchTerm.toLowerCase())
+      user.displayName.split(" ")[0].toLowerCase().includes(searchTerm.toLowerCase())
     );
     const sorted = filtered.sort((a, b) => {
       const aLast = lastMessageMap[a.uid] || 0;
@@ -267,7 +267,7 @@ const Home = () => {
         {
           [combinedId + ".userInfo"]: {
             uid: currentUser.uid,
-            displayName: currentUser.displayName,
+            displayName: currentUser.displayName.split(" ")[0],
           },
           [combinedId + ".date"]: serverTimestamp(),
         },
@@ -761,7 +761,7 @@ const handleOpenModal = async () => {
               </div>
               <div className="user-details">
                 <div className="user-names">
-                  {currentUser?.displayName || currentUser?.email}
+                  {currentUser.displayName.split(" ")[0]}
                 </div>
                 <div className="user-status">🟢 Online</div>
               </div>
@@ -798,9 +798,9 @@ const handleOpenModal = async () => {
                     style={{ display: "flex", alignItems: "center", gap: 10 }}
                   >
                     <div className="user-avatar">
-                      {user.displayName?.charAt(0).toUpperCase()}
+                      {user.displayName?.split(" ")[0]?.charAt(0).toUpperCase()}
                     </div>
-                    <div className="user-name">{user.displayName}</div>
+                    <div className="user-name">{user.displayName.split(" ")[0]}</div>
                   </div>
                   {unreadMap[user.uid] > 0 && (
                     <div className="unread-badge">
@@ -1033,7 +1033,7 @@ const handleOpenModal = async () => {
                       fontSize: "18px",
                     }}
                   >
-                    {user.displayName?.charAt(0)?.toUpperCase() || "U"}
+                    {user.displayName.split(" ")[0]?.charAt(0)?.toUpperCase() || "U"}aaaa
                   </div>
                   <div
                     style={{
@@ -1179,7 +1179,7 @@ const handleOpenModal = async () => {
                     }}
                   >
                     {/* ✅ Use username if available */}
-                    {selectedUser.username || selectedUser.displayName}
+                    {selectedUser.username || selectedUser.displayName.split(" ")[0]}
                   </h3>
                   <div>
                     <span
@@ -1284,7 +1284,7 @@ const handleOpenModal = async () => {
                         <span className="message-sender">
                           {msg.senderId === currentUser.uid
                             ? currentUser.username ||
-                              currentUser.displayName ||
+                              currentUser.displayName.split(" ")[0] ||
                               "You"
                             : selectedUser?.username ||
                               selectedUser?.displayName ||

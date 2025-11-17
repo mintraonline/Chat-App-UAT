@@ -13,7 +13,7 @@ const Register = () => {
   const [lastName, setLastName] = useState("");
 
   const navigate = useNavigate();
-  const isValidUsername = (name) => /^[a-zA-Z0-9]{7}$/.test(name);
+  const isValidUsername = (name) => /^[a-zA-Z0-9]{6}$/.test(name);
 
   const handleRegister = async () => {
     try {
