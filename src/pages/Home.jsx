@@ -798,7 +798,8 @@ const handleOpenModal = async () => {
                     style={{ display: "flex", alignItems: "center", gap: 10 }}
                   >
                     <div className="user-avatar">
-                      {user.displayName?.split(" ")[0]?.charAt(0).toUpperCase()}
+                      U
+                      {/* {user.displayName?.split(" ")[0]?.charAt(0).toUpperCase()} */}
                     </div>
                     <div className="user-name">{user.displayName.split(" ")[0]}</div>
                   </div>
@@ -1033,7 +1034,8 @@ const handleOpenModal = async () => {
                       fontSize: "18px",
                     }}
                   >
-                    {user.displayName.split(" ")[0]?.charAt(0)?.toUpperCase() || "U"}aaaa
+                    U
+                    {/* {user.displayName.split(" ")[0]?.charAt(0)?.toUpperCase() || "U"} */}
                   </div>
                   <div
                     style={{
